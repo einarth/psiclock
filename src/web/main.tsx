@@ -6,11 +6,15 @@ import { Home } from './pages/Home';
 import { Director } from './pages/Director';
 import { Display } from './pages/Display';
 import { Players } from './pages/Players';
+import { Floor } from './pages/Floor';
+import { Desk } from './pages/Desk';
 
 function route() {
   const [, page, id] = location.pathname.split('/');
   if (page === 'director' && id) return <Director id={Number(id)} />;
   if (page === 'display' && id) return <Display id={Number(id)} />;
+  if (page === 'floor' && id) return <Floor id={Number(id)} />;
+  if (page === 'desk' && id) return <Desk id={Number(id)} />;
   if (page === 'players') return <Players />;
   return <Home />;
 }

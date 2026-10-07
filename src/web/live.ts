@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { clockAt, type ClockView } from '../shared/clock';
-import type { ServerMessage, Tournament } from '../shared/types';
+import type { Entry, ServerMessage, Tournament } from '../shared/types';
 
 /**
  * Subscribes to a tournament over the WebSocket and keeps a local clock view
@@ -9,6 +9,7 @@ import type { ServerMessage, Tournament } from '../shared/types';
  */
 export function useLiveTournament(id: number) {
   const [tournament, setTournament] = useState<Tournament | null>(null);
+  const [entries, setEntries] = useState<Entry[]>([]);
   const [offset, setOffset] = useState(0);
   const [connected, setConnected] = useState(false);
 
@@ -23,7 +24,10 @@ export function useLiveTournament(id: number) {
       socket.onmessage = (ev) => {
         const msg = JSON.parse(ev.data) as ServerMessage;
         setOffset(msg.serverTime - Date.now());
-        if (msg.type === 'tournament') setTournament(msg.tournament);
+        if (msg.type === 'tournament') {
+          setTournament(msg.tournament);
+          setEntries(msg.entries);
+        }
       };
       socket.onclose = () => {
         setConnected(false);
@@ -38,7 +42,7 @@ export function useLiveTournament(id: number) {
     };
   }, [id]);
 
-  return { tournament, setTournament, offset, connected };
+  return { tournament, entries, setTournament, offset, connected };
 }
 
 export function useClockView(t: Tournament | null, offset: number): ClockView | null {

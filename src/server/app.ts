@@ -4,14 +4,18 @@ import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import type { Storage } from './storage/storage.js';
 import { Hub } from './hub.js';
+import { registerFloorRoutes } from './floor.js';
 import { applyClockCommand, clockAt, initialClock } from '../shared/clock.js';
-import type { ClockCommand, Level, NewPlayer } from '../shared/types.js';
+import type { ClockCommand, Id, Level, NewPlayer, TableConfig } from '../shared/types.js';
+import type { Rand } from '../shared/seating.js';
 
 export interface AppOptions {
   storage: Storage;
   /** Folder with the built web app; omitted in dev, where Vite serves it. */
   webRoot?: string;
   logger?: boolean;
+  /** Random source for seat draws; tests pass a fixed one. */
+  rand?: Rand;
 }
 
 const clockCommands = new Set(['clock.start', 'clock.pause', 'clock.adjust', 'clock.setLevel']);
@@ -31,10 +35,16 @@ function validLevels(levels: unknown): levels is Level[] {
   );
 }
 
-export async function buildApp({ storage, webRoot, logger = false }: AppOptions): Promise<FastifyInstance> {
+export async function buildApp({ storage, webRoot, logger = false, rand }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger });
   const hub = new Hub();
   await app.register(websocket);
+
+  const publish = async (id: Id) => {
+    const t = await storage.getTournament(id);
+    if (t) hub.publish(t, await storage.listEntries(id));
+  };
+  registerFloorRoutes(app, storage, publish, rand);
 
   app.get('/api/time', async () => ({ serverTime: Date.now() }));
 
@@ -76,12 +86,31 @@ export async function buildApp({ storage, webRoot, logger = false }: AppOptions)
   });
 
   app.post<{
-    Body: { name?: string; buyIn?: number; fee?: number; startingStack?: number; structureId?: number; theme?: string };
+    Body: {
+      name?: string;
+      buyIn?: number;
+      fee?: number;
+      startingStack?: number;
+      structureId?: number;
+      theme?: string;
+      tableCount?: number;
+      seatsPerTable?: number;
+    };
   }>('/api/tournaments', async (req, reply) => {
     const b = req.body ?? {};
     if (!b.name?.trim()) return reply.code(400).send({ error: 'name is required' });
     const structure = (await storage.listStructures()).find((s) => s.id === b.structureId);
     if (!structure) return reply.code(400).send({ error: 'unknown blind structure' });
+    const tableCount = Number(b.tableCount ?? 0);
+    const seatsPerTable = Number(b.seatsPerTable ?? 9);
+    if (!(tableCount >= 0 && tableCount <= 50 && seatsPerTable >= 2 && seatsPerTable <= 12)) {
+      return reply.code(400).send({ error: 'use 0 to 50 tables of 2 to 12 seats' });
+    }
+    const tables: TableConfig[] = Array.from({ length: tableCount }, (_, i) => ({
+      number: i + 1,
+      seats: seatsPerTable,
+      open: true,
+    }));
     const t = await storage.createTournament(
       {
         name: b.name.trim(),
@@ -90,6 +119,7 @@ export async function buildApp({ storage, webRoot, logger = false }: AppOptions)
         startingStack: Number(b.startingStack ?? 0),
         levels: structure.levels,
         theme: b.theme,
+        tables,
       },
       initialClock(Date.now()),
     );
@@ -109,10 +139,13 @@ export async function buildApp({ storage, webRoot, logger = false }: AppOptions)
     const status = t.status === 'setup' && cmd.type === 'clock.start' ? 'running' : finished ? 'finished' : t.status;
     await storage.updateTournamentClock(id, clock, status);
     await storage.appendAction({ tournamentId: id, type: cmd.type, payload: cmd, actor: 'director' });
-    const updated = { ...t, clock, status };
-    hub.publishTournament(updated);
-    return updated;
+    await publish(id);
+    return { ...t, clock, status };
   });
+
+  app.get<{ Params: { id: string } }>('/api/tournaments/:id/entries', async (req) =>
+    storage.listEntries(Number(req.params.id)),
+  );
 
   app.get<{ Params: { id: string } }>('/api/tournaments/:id/actions', async (req) =>
     storage.listActions(Number(req.params.id)),
@@ -125,7 +158,10 @@ export async function buildApp({ storage, webRoot, logger = false }: AppOptions)
     if (!id) return;
     hub.watch(id, socket);
     const t = await storage.getTournament(id);
-    if (t) hub.send(socket, { type: 'tournament', tournament: t, serverTime: Date.now() });
+    if (t) {
+      const entries = await storage.listEntries(id);
+      hub.send(socket, { type: 'tournament', tournament: t, entries, serverTime: Date.now() });
+    }
   });
 
   if (webRoot && existsSync(webRoot)) {

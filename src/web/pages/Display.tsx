@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useClockView, useLiveTournament } from '../live';
 import { formatClock } from '../../shared/clock';
 import { blindsText, num } from '../format';
+import { fieldStats } from '../../shared/seating';
 
 /** Short two-tone chime played on the big screen when a level changes. */
 function chime(ctx: AudioContext) {
@@ -18,7 +19,7 @@ function chime(ctx: AudioContext) {
 }
 
 export function Display({ id }: { id: number }) {
-  const { tournament: t, offset, connected } = useLiveTournament(id);
+  const { tournament: t, entries, offset, connected } = useLiveTournament(id);
   const view = useClockView(t, offset);
   const audio = useRef<AudioContext | null>(null);
   const lastLevel = useRef<number | null>(null);
@@ -41,10 +42,12 @@ export function Display({ id }: { id: number }) {
   if (!t || !view) return <div className="display" data-theme={theme}>Connecting...</div>;
   const isBreak = view.level?.kind === 'break';
   const lowTime = view.running && view.remainingMs < 60_000;
+  const stats = fieldStats(entries, t.startingStack);
 
   return (
     <div className="display" data-theme={theme} onClick={enable}>
       <header className="display-title">{t.name}</header>
+      {t.handForHand && <div className="display-hfh">Hand for hand</div>}
       <div className="display-level">{isBreak ? 'Break' : `Level ${view.levelNumber}`}</div>
       <div className={`display-clock${lowTime ? ' low' : ''}${view.running ? '' : ' paused'}`}>
         {formatClock(view.remainingMs)}
@@ -54,13 +57,17 @@ export function Display({ id }: { id: number }) {
       <div className="display-next">Next: {view.nextLevel ? blindsText(view.nextLevel) : 'final level'}</div>
       <footer className="display-stats">
         <div>
+          <span>Players</span>
+          {stats.remaining} / {stats.entries}
+        </div>
+        <div>
+          <span>Average stack</span>
+          {num(stats.averageStack)}
+        </div>
+        <div>
           <span>Buy-in</span>
           {num(t.buyIn)}
           {t.fee ? ` + ${num(t.fee)}` : ''}
-        </div>
-        <div>
-          <span>Starting stack</span>
-          {num(t.startingStack)}
         </div>
       </footer>
       {!soundOn && <div className="display-hint">Click anywhere for full screen and sound</div>}

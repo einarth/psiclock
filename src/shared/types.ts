@@ -54,6 +54,26 @@ export interface ClockState {
 
 export type TournamentStatus = 'setup' | 'running' | 'finished';
 
+export interface TableConfig {
+  number: number;
+  seats: number;
+  /** False once the table has been broken. */
+  open: boolean;
+}
+
+/** One player's place in one tournament: their seat while alive, their bust order once out. */
+export interface Entry {
+  id: Id;
+  tournamentId: Id;
+  playerId: Id;
+  playerName: string;
+  table: number | null;
+  seat: number | null;
+  /** Order in which players busted (1 = first out); null while still in. */
+  bustSeq: number | null;
+  createdAt: string;
+}
+
 export interface Tournament {
   id: Id;
   name: string;
@@ -64,11 +84,13 @@ export interface Tournament {
   levels: Level[];
   clock: ClockState;
   theme: string;
+  tables: TableConfig[];
+  handForHand: boolean;
   createdAt: string;
 }
 
 export type NewTournament = Pick<Tournament, 'name' | 'buyIn' | 'fee' | 'startingStack' | 'levels'> &
-  Partial<Pick<Tournament, 'theme'>>;
+  Partial<Pick<Tournament, 'theme' | 'tables'>>;
 
 export interface ActionLogEntry {
   id: Id;
@@ -89,4 +111,4 @@ export type ClockCommand =
 /** Messages the server pushes over the WebSocket. */
 export type ServerMessage =
   | { type: 'hello'; serverTime: number }
-  | { type: 'tournament'; tournament: Tournament; serverTime: number };
+  | { type: 'tournament'; tournament: Tournament; entries: Entry[]; serverTime: number };

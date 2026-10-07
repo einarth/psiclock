@@ -6,11 +6,13 @@ import type {
   ActionLogEntry,
   BlindStructure,
   ClockState,
+  Entry,
   Id,
   NewBlindStructure,
   NewPlayer,
   NewTournament,
   Player,
+  TableConfig,
   Tournament,
   TournamentStatus,
 } from '../../shared/types.js';
@@ -54,6 +56,20 @@ const migrations: string[] = [
      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
    );
    CREATE INDEX action_log_tournament ON action_log(tournament_id, id);`,
+  `ALTER TABLE tournaments ADD COLUMN tables TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE tournaments ADD COLUMN hand_for_hand INTEGER NOT NULL DEFAULT 0;
+   CREATE TABLE entries (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     tournament_id INTEGER NOT NULL REFERENCES tournaments(id),
+     player_id INTEGER NOT NULL REFERENCES players(id),
+     table_no INTEGER,
+     seat_no INTEGER,
+     bust_seq INTEGER,
+     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+   );
+   CREATE INDEX entries_tournament ON entries(tournament_id);
+   CREATE UNIQUE INDEX entries_seat ON entries(tournament_id, table_no, seat_no)
+     WHERE bust_seq IS NULL AND table_no IS NOT NULL;`,
 ];
 
 const toPlayer = (r: Row): Player => ({
@@ -81,6 +97,19 @@ const toTournament = (r: Row): Tournament => ({
   levels: JSON.parse(String(r.levels)),
   clock: JSON.parse(String(r.clock)),
   theme: String(r.theme),
+  tables: JSON.parse(String(r.tables)),
+  handForHand: Boolean(r.hand_for_hand),
+  createdAt: String(r.created_at),
+});
+
+const toEntry = (r: Row): Entry => ({
+  id: Number(r.id),
+  tournamentId: Number(r.tournament_id),
+  playerId: Number(r.player_id),
+  playerName: String(r.player_name),
+  table: r.table_no == null ? null : Number(r.table_no),
+  seat: r.seat_no == null ? null : Number(r.seat_no),
+  bustSeq: r.bust_seq == null ? null : Number(r.bust_seq),
   createdAt: String(r.created_at),
 });
 
@@ -123,6 +152,24 @@ export class SqliteStorage implements Storage {
 
   async close() {
     this.db.close();
+  }
+
+  private inTransaction = false;
+
+  async transaction<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.inTransaction) return fn();
+    this.inTransaction = true;
+    this.db.exec('BEGIN');
+    try {
+      const result = await fn();
+      this.db.exec('COMMIT');
+      return result;
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    } finally {
+      this.inTransaction = false;
+    }
   }
 
   async listPlayers(search?: string) {
@@ -184,8 +231,8 @@ export class SqliteStorage implements Storage {
   async createTournament(t: NewTournament, clock: ClockState) {
     const r = this.db
       .prepare(
-        `INSERT INTO tournaments (name, buy_in, fee, starting_stack, levels, clock, theme)
-         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+        `INSERT INTO tournaments (name, buy_in, fee, starting_stack, levels, clock, theme, tables)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
       )
       .get(
         t.name,
@@ -195,12 +242,46 @@ export class SqliteStorage implements Storage {
         JSON.stringify(t.levels),
         JSON.stringify(clock),
         t.theme ?? 'classic',
+        JSON.stringify(t.tables ?? []),
       ) as Row;
     return toTournament(r);
   }
 
   async updateTournamentClock(id: Id, clock: ClockState, status: TournamentStatus) {
     this.db.prepare('UPDATE tournaments SET clock = ?, status = ? WHERE id = ?').run(JSON.stringify(clock), status, id);
+  }
+
+  async updateTournament(id: Id, patch: { tables?: TableConfig[]; handForHand?: boolean }) {
+    if (patch.tables) this.db.prepare('UPDATE tournaments SET tables = ? WHERE id = ?').run(JSON.stringify(patch.tables), id);
+    if (patch.handForHand !== undefined) {
+      this.db.prepare('UPDATE tournaments SET hand_for_hand = ? WHERE id = ?').run(patch.handForHand ? 1 : 0, id);
+    }
+  }
+
+  async listEntries(tournamentId: Id) {
+    const rows = this.db
+      .prepare(
+        `SELECT e.*, p.name AS player_name FROM entries e JOIN players p ON p.id = e.player_id
+         WHERE e.tournament_id = ? ORDER BY e.id`,
+      )
+      .all(tournamentId) as Row[];
+    return rows.map(toEntry);
+  }
+
+  async createEntry(tournamentId: Id, playerId: Id, seat: { table: number; seat: number }) {
+    const { id } = this.db
+      .prepare('INSERT INTO entries (tournament_id, player_id, table_no, seat_no) VALUES (?, ?, ?, ?) RETURNING id')
+      .get(tournamentId, playerId, seat.table, seat.seat) as Row;
+    const r = this.db
+      .prepare('SELECT e.*, p.name AS player_name FROM entries e JOIN players p ON p.id = e.player_id WHERE e.id = ?')
+      .get(Number(id)) as Row;
+    return toEntry(r);
+  }
+
+  async updateEntry(id: Id, patch: { table: number | null; seat: number | null; bustSeq: number | null }) {
+    this.db
+      .prepare('UPDATE entries SET table_no = ?, seat_no = ?, bust_seq = ? WHERE id = ?')
+      .run(patch.table, patch.seat, patch.bustSeq, id);
   }
 
   async appendAction(e: Omit<ActionLogEntry, 'id' | 'createdAt'>) {

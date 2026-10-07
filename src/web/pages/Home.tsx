@@ -7,7 +7,7 @@ export function Home() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [structures, setStructures] = useState<BlindStructure[]>([]);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: '', buyIn: 0, fee: 0, startingStack: 30000, structureId: 0, theme: 'classic' });
+  const [form, setForm] = useState({ name: '', buyIn: 0, fee: 0, startingStack: 30000, structureId: 0, theme: 'classic', tableCount: 10, seatsPerTable: 9 });
 
   const load = () => {
     api.tournaments().then(setTournaments);
@@ -49,7 +49,9 @@ export function Home() {
                 <strong>{t.name}</strong> <span className={`badge badge-${t.status}`}>{t.status}</span>
               </span>
               <span className="actions">
-                <a href={`/director/${t.id}`}>Control</a>
+                <a href={`/director/${t.id}`}>Clock</a>
+                <a href={`/desk/${t.id}`}>Desk</a>
+                <a href={`/floor/${t.id}`}>Floor</a>
                 <a href={`/display/${t.id}`} target="_blank" rel="noreferrer">
                   Big screen
                 </a>
@@ -81,6 +83,26 @@ export function Home() {
               min={0}
               value={form.startingStack}
               onChange={(e) => setForm({ ...form, startingStack: +e.target.value })}
+            />
+          </label>
+          <label>
+            Tables
+            <input
+              type="number"
+              min={0}
+              max={50}
+              value={form.tableCount}
+              onChange={(e) => setForm({ ...form, tableCount: +e.target.value })}
+            />
+          </label>
+          <label>
+            Seats per table
+            <input
+              type="number"
+              min={2}
+              max={12}
+              value={form.seatsPerTable}
+              onChange={(e) => setForm({ ...form, seatsPerTable: +e.target.value })}
             />
           </label>
           <label>
