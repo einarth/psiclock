@@ -1,0 +1,8 @@
+[data-theme='midnight'] {
+  --d-bg: #05070d;
+  --d-text: #e8ecf5;
+  --d-muted: #7d8aa6;
+  --d-accent: #59a8ff;
+  --d-warning: #ff5c5c;
+  --d-font: 'Segoe UI', system-ui, sans-serif;
+}

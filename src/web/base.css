@@ -1,0 +1,88 @@
+/* Admin pages (director, desk, players) share these tokens. The big screen uses theme files. */
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --text: #1c1f24;
+  --muted: #6b7280;
+  --border: #d9dce1;
+  --accent: #1f6f43;
+  --accent-text: #ffffff;
+  --danger: #b42318;
+  --highlight: #e7f3ec;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a;
+    --surface: #1e2125;
+    --text: #e8eaed;
+    --muted: #9aa0a6;
+    --border: #33373d;
+    --accent: #3fa36b;
+    --highlight: #20352a;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, sans-serif; }
+a { color: var(--accent); }
+.page { max-width: 1000px; margin: 0 auto; padding: 16px; }
+.page-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.page-head nav { display: flex; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.card h2 { margin-top: 0; font-size: 1.1rem; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+.error { color: var(--danger); }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--border); gap: 8px; flex-wrap: wrap; }
+.list li:first-child { border-top: 0; }
+.actions { display: flex; gap: 16px; }
+.badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background: var(--border); text-transform: uppercase; }
+.badge-running { background: var(--accent); color: var(--accent-text); }
+.grid-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-items: end; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.search { width: 100%; margin-bottom: 12px; }
+button { font: inherit; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+button.primary, form button[type='submit'] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.link { border: 0; background: none; color: var(--accent); padding: 0; }
+button:disabled { opacity: 0.5; cursor: default; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 500; font-size: 0.85rem; border-top: 0; }
+tr.current { background: var(--highlight); font-weight: 600; }
+tr.past { color: var(--muted); }
+.players { display: block; overflow-x: auto; }
+.control { text-align: center; }
+.control-clock { font-size: clamp(3rem, 15vw, 6rem); font-variant-numeric: tabular-nums; font-weight: 700; }
+.control-level { font-size: 1.2rem; margin-bottom: 16px; }
+.control-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+/* Big screen: layout only. Colours and fonts come from the theme files via these variables. */
+.display {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1vh;
+  padding: 3vh 3vw;
+  background: var(--d-bg);
+  color: var(--d-text);
+  font-family: var(--d-font);
+  text-align: center;
+  cursor: default;
+  user-select: none;
+}
+.display-title { font-size: 4vh; color: var(--d-muted); letter-spacing: 0.05em; }
+.display-level { font-size: 6vh; color: var(--d-accent); font-weight: 700; text-transform: uppercase; }
+.display-clock { font-size: 30vh; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; }
+.display-clock.low { color: var(--d-warning); }
+.display-clock.paused { opacity: 0.6; }
+.display-paused { font-size: 4vh; color: var(--d-warning); text-transform: uppercase; letter-spacing: 0.2em; }
+.display-blinds { font-size: 9vh; font-weight: 600; font-variant-numeric: tabular-nums; }
+.display-next { font-size: 4vh; color: var(--d-muted); }
+.display-stats { display: flex; gap: 6vw; margin-top: 3vh; font-size: 4vh; }
+.display-stats span { display: block; font-size: 2.2vh; color: var(--d-muted); text-transform: uppercase; }
+.display-hint, .display-offline { position: fixed; bottom: 12px; left: 0; right: 0; font-size: 1.6vh; color: var(--d-muted); }
+.display-offline { top: 12px; bottom: auto; color: var(--d-warning); }

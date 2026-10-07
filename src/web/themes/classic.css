@@ -1,0 +1,9 @@
+/* Felt green with gold accents. Copy this file to make a new theme, then add it to main.tsx. */
+[data-theme='classic'] {
+  --d-bg: radial-gradient(ellipse at center, #1d6b3f 0%, #0b3a20 80%);
+  --d-text: #ffffff;
+  --d-muted: #b9d8c4;
+  --d-accent: #f2c14e;
+  --d-warning: #ff8a65;
+  --d-font: 'Segoe UI', system-ui, sans-serif;
+}
