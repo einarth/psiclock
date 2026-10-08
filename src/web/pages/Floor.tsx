@@ -13,7 +13,8 @@ import {
   tableToBreak,
 } from '../../shared/seating';
 import type { Entry, TableConfig } from '../../shared/types';
-import { blindsText, ordinal, short } from '../format';
+import { blindsText, num, ordinal, short } from '../format';
+import { averageStack, payoutsFor } from '../../shared/money';
 
 type Sheet =
   | { kind: 'player'; entry: Entry }
@@ -60,14 +61,16 @@ export function Floor({ id }: { id: number }) {
   const bust = (e: Entry) => {
     // Busting now places them just behind everyone else still in.
     const place = entries.filter(isAlive).length;
+    const prize = payoutsFor(t, entries)[place - 1] ?? 0;
+    const money = prize > 0 ? ` and win ${num(prize)}` : '';
     setSheet({
       kind: 'confirm',
-      text: `Bust ${e.playerName} (table ${e.table}, seat ${e.seat})? They finish ${ordinal(place)}.`,
+      text: `Bust ${e.playerName} (table ${e.table}, seat ${e.seat})? They finish ${ordinal(place)}${money}.`,
       danger: true,
       action: () =>
         act(
           () => api.bust(id, e.id),
-          `${e.playerName} out in ${ordinal(place)}`,
+          `${e.playerName} out in ${ordinal(place)}${prize > 0 ? `, send to the desk for ${num(prize)}` : ''}`,
           () => api.restore(id, e.id),
         ),
     });
@@ -97,7 +100,7 @@ export function Floor({ id }: { id: number }) {
           <span>
             <b>{stats.remaining}</b> / {stats.entries} left
           </span>
-          <span>avg {short(stats.averageStack)}</span>
+          <span>avg {short(averageStack(t, entries))}</span>
           <span>{blindsText(view.level)}</span>
         </div>
         {!connected && <div className="floor-alert danger">Lost connection, reconnecting...</div>}

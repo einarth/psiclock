@@ -39,7 +39,7 @@ a { color: var(--accent); }
 .actions { display: flex; gap: 16px; }
 .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background: var(--border); text-transform: uppercase; }
 .badge-running { background: var(--accent); color: var(--accent-text); }
-.grid-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-items: end; }
+.grid-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-items: start; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
 input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
 .search { width: 100%; margin-bottom: 12px; }
@@ -128,3 +128,31 @@ button.big { width: 100%; padding: 14px; margin-top: 8px; font-size: 1.05rem; }
 .toast { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 9; max-width: 520px; margin: 0 auto; background: var(--text); color: var(--bg); border-radius: 10px; padding: 12px 14px; display: flex; gap: 16px; align-items: center; }
 .toast span { flex: 1; }
 .toast button.link { color: var(--bg); text-decoration: underline; }
+
+/* Money: settings, payout table, desk cashier */
+.subhead { font-size: 0.95rem; margin: 16px 0 8px; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+label.inline { flex-direction: row; align-items: center; gap: 8px; }
+.card-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.money-line { display: flex; flex-wrap: wrap; gap: 4px 20px; color: var(--muted); }
+.money-line b { color: var(--text); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.payouts input { padding: 4px 8px; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.row-actions button { padding: 6px 10px; }
+.collect { font-size: 1.2rem; margin-top: 4px; }
+.notice { background: #fff1d6; color: #8a5a00; border-radius: 8px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.paid { color: var(--accent); font-weight: 600; }
+
+/* Payout screen for a second TV */
+.payout-screen { justify-content: flex-start; }
+.payout-screen .display-title { margin-bottom: 1vh; }
+.payout-pool { font-size: 7vh; font-weight: 700; }
+.payout-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(var(--rows), auto); gap: 0.6vh 5vw; font-size: var(--size); font-variant-numeric: tabular-nums; margin-top: 2vh; }
+.payout-grid div { display: flex; justify-content: space-between; gap: 3vw; min-width: 22vw; }
+.payout-grid .place { color: var(--d-muted); }
+.payout-grid .done { opacity: 0.45; }
+.payout-grid .who { color: var(--d-accent); font-size: 0.7em; align-self: center; }
+@media (prefers-color-scheme: dark) {
+  .notice { background: #3a2c10; color: #f3c46b; }
+}

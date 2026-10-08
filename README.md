@@ -39,10 +39,11 @@ npm run typecheck
 | Path | Who | What |
 | --- | --- | --- |
 | `/` | Director | List and create tournaments |
-| `/director/:id` | Director | Run the clock: start, pause, add or remove time, change level |
-| `/desk/:id` | Desk | Find or add a player and seat them; shows the table and seat to tell the player |
+| `/director/:id` | Director | Run the clock; buy-in, rebuy, add-on, late registration and guarantee settings; payout table (automatic about 15% paid, or edit the percentages by hand) |
+| `/desk/:id` | Desk | Register and seat players, take rebuys and add-ons (shows the amount to collect), prize pool summary, mark prizes paid, results as CSV |
 | `/floor/:id` | Floor staff | Phone or tablet view: bust players (with undo), move players, balance and break tables, redraw seats, hand-for-hand |
 | `/display/:id` | Big screen | Clock, blinds, next level; click once for full screen and sound. `?theme=midnight` overrides the theme |
+| `/payouts/:id` | Second screen | Prize pool and payout table, filling in each place as players finish |
 | `/players` | Desk | Player database: add with just a name, fill in details later |
 
 ## Layout
@@ -61,5 +62,11 @@ screen shows the same time because each corrects for its offset from the server 
 Seating follows TDA practice: random seat draws, new players go to the shortest table, a
 balance move is suggested when tables differ by two or more, and the highest-numbered table
 is broken first once the others can seat everyone. The rules live in `src/shared/seating.ts`.
+
+Money follows the same idea: buy-ins, rebuys and add-ons go into the prize pool and fees are
+kept apart. Until the director saves their own percentages, about 15% of entries are paid on
+a top-heavy curve, and prizes are rounded down to the rounding unit with the remainder added to
+first place. Level limits for late registration and rebuys can be overridden at the desk. The
+rules live in `src/shared/money.ts`.
 
 Every change is also written to `action_log`, which later steps use for the audit trail and undo.

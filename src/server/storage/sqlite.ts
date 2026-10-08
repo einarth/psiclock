@@ -7,15 +7,17 @@ import type {
   BlindStructure,
   ClockState,
   Entry,
+  EntryPatch,
   Id,
   NewBlindStructure,
   NewPlayer,
   NewTournament,
   Player,
-  TableConfig,
   Tournament,
+  TournamentPatch,
   TournamentStatus,
 } from '../../shared/types.js';
+import { defaultMoney } from '../../shared/money.js';
 
 type Row = Record<string, unknown>;
 
@@ -70,7 +72,44 @@ const migrations: string[] = [
    CREATE INDEX entries_tournament ON entries(tournament_id);
    CREATE UNIQUE INDEX entries_seat ON entries(tournament_id, table_no, seat_no)
      WHERE bust_seq IS NULL AND table_no IS NOT NULL;`,
+  `ALTER TABLE tournaments ADD COLUMN money TEXT NOT NULL DEFAULT '{}';
+   ALTER TABLE tournaments ADD COLUMN payouts TEXT;
+   ALTER TABLE entries ADD COLUMN rebuys INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE entries ADD COLUMN add_on INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE entries ADD COLUMN paid_out INTEGER NOT NULL DEFAULT 0;`,
 ];
+
+/** How each patchable field is stored: column name and conversion to a SQLite value. */
+type Column = [string, (v: never) => string | number | null];
+const json = (v: unknown) => (v == null ? null : JSON.stringify(v));
+const tournamentColumns: Record<keyof TournamentPatch, Column> = {
+  name: ['name', (v: string) => v],
+  buyIn: ['buy_in', (v: number) => v],
+  fee: ['fee', (v: number) => v],
+  startingStack: ['starting_stack', (v: number) => v],
+  theme: ['theme', (v: string) => v],
+  tables: ['tables', json],
+  handForHand: ['hand_for_hand', (v: boolean) => (v ? 1 : 0)],
+  money: ['money', json],
+  payouts: ['payouts', json],
+};
+const entryColumns: Record<keyof EntryPatch, Column> = {
+  table: ['table_no', (v: number | null) => v],
+  seat: ['seat_no', (v: number | null) => v],
+  bustSeq: ['bust_seq', (v: number | null) => v],
+  rebuys: ['rebuys', (v: number) => v],
+  addOn: ['add_on', (v: boolean) => (v ? 1 : 0)],
+  paidOut: ['paid_out', (v: number) => v],
+};
+
+/** Builds "a = ?, b = ?" and the values for the fields present in a patch. */
+function setClause<P extends object>(patch: P, columns: Record<keyof P, Column>) {
+  const keys = (Object.keys(patch) as (keyof P)[]).filter((k) => k in columns && patch[k] !== undefined);
+  return {
+    sql: keys.map((k) => `${columns[k][0]} = ?`).join(', '),
+    values: keys.map((k) => columns[k][1](patch[k] as never)),
+  };
+}
 
 const toPlayer = (r: Row): Player => ({
   id: Number(r.id),
@@ -99,6 +138,8 @@ const toTournament = (r: Row): Tournament => ({
   theme: String(r.theme),
   tables: JSON.parse(String(r.tables)),
   handForHand: Boolean(r.hand_for_hand),
+  money: { ...defaultMoney, ...JSON.parse(String(r.money)) },
+  payouts: r.payouts == null ? null : JSON.parse(String(r.payouts)),
   createdAt: String(r.created_at),
 });
 
@@ -110,6 +151,9 @@ const toEntry = (r: Row): Entry => ({
   table: r.table_no == null ? null : Number(r.table_no),
   seat: r.seat_no == null ? null : Number(r.seat_no),
   bustSeq: r.bust_seq == null ? null : Number(r.bust_seq),
+  rebuys: Number(r.rebuys),
+  addOn: Boolean(r.add_on),
+  paidOut: Number(r.paid_out),
   createdAt: String(r.created_at),
 });
 
@@ -231,8 +275,8 @@ export class SqliteStorage implements Storage {
   async createTournament(t: NewTournament, clock: ClockState) {
     const r = this.db
       .prepare(
-        `INSERT INTO tournaments (name, buy_in, fee, starting_stack, levels, clock, theme, tables)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+        `INSERT INTO tournaments (name, buy_in, fee, starting_stack, levels, clock, theme, tables, money)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
       )
       .get(
         t.name,
@@ -243,6 +287,7 @@ export class SqliteStorage implements Storage {
         JSON.stringify(clock),
         t.theme ?? 'classic',
         JSON.stringify(t.tables ?? []),
+        JSON.stringify({ ...defaultMoney, ...t.money }),
       ) as Row;
     return toTournament(r);
   }
@@ -251,11 +296,9 @@ export class SqliteStorage implements Storage {
     this.db.prepare('UPDATE tournaments SET clock = ?, status = ? WHERE id = ?').run(JSON.stringify(clock), status, id);
   }
 
-  async updateTournament(id: Id, patch: { tables?: TableConfig[]; handForHand?: boolean }) {
-    if (patch.tables) this.db.prepare('UPDATE tournaments SET tables = ? WHERE id = ?').run(JSON.stringify(patch.tables), id);
-    if (patch.handForHand !== undefined) {
-      this.db.prepare('UPDATE tournaments SET hand_for_hand = ? WHERE id = ?').run(patch.handForHand ? 1 : 0, id);
-    }
+  async updateTournament(id: Id, patch: TournamentPatch) {
+    const { sql, values } = setClause(patch, tournamentColumns);
+    if (sql) this.db.prepare(`UPDATE tournaments SET ${sql} WHERE id = ?`).run(...values, id);
   }
 
   async listEntries(tournamentId: Id) {
@@ -278,10 +321,9 @@ export class SqliteStorage implements Storage {
     return toEntry(r);
   }
 
-  async updateEntry(id: Id, patch: { table: number | null; seat: number | null; bustSeq: number | null }) {
-    this.db
-      .prepare('UPDATE entries SET table_no = ?, seat_no = ?, bust_seq = ? WHERE id = ?')
-      .run(patch.table, patch.seat, patch.bustSeq, id);
+  async updateEntry(id: Id, patch: EntryPatch) {
+    const { sql, values } = setClause(patch, entryColumns);
+    if (sql) this.db.prepare(`UPDATE entries SET ${sql} WHERE id = ?`).run(...values, id);
   }
 
   async appendAction(e: Omit<ActionLogEntry, 'id' | 'createdAt'>) {

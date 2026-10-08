@@ -71,7 +71,29 @@ export interface Entry {
   seat: number | null;
   /** Order in which players busted (1 = first out); null while still in. */
   bustSeq: number | null;
+  rebuys: number;
+  addOn: boolean;
+  /** Prize money handed to the player; 0 until the desk marks it paid. */
+  paidOut: number;
   createdAt: string;
+}
+
+/** Rebuy, add-on, late registration and payout rules. A limit of 0 means no limit. */
+export interface MoneyConfig {
+  rebuyPrice: number;
+  rebuyFee: number;
+  rebuyChips: number;
+  /** Rebuys are allowed up to the end of this level; 0 = for the whole tournament. */
+  rebuyUntilLevel: number;
+  addOnPrice: number;
+  addOnFee: number;
+  addOnChips: number;
+  /** Registration closes after this level (including the break that follows it); 0 = never. */
+  lateRegUntilLevel: number;
+  /** The prize pool is at least this much. */
+  guarantee: number;
+  /** Payouts are rounded down to a multiple of this; the remainder goes to first place. */
+  rounding: number;
 }
 
 export interface Tournament {
@@ -86,11 +108,21 @@ export interface Tournament {
   theme: string;
   tables: TableConfig[];
   handForHand: boolean;
+  money: MoneyConfig;
+  /** Percent of the prize pool per place, set by hand; null = use the suggested table. */
+  payouts: number[] | null;
   createdAt: string;
 }
 
 export type NewTournament = Pick<Tournament, 'name' | 'buyIn' | 'fee' | 'startingStack' | 'levels'> &
-  Partial<Pick<Tournament, 'theme' | 'tables'>>;
+  Partial<Pick<Tournament, 'theme' | 'tables' | 'money'>>;
+
+/** Fields the director can change after the tournament is created. */
+export type TournamentPatch = Partial<
+  Pick<Tournament, 'name' | 'buyIn' | 'fee' | 'startingStack' | 'theme' | 'tables' | 'handForHand' | 'money' | 'payouts'>
+>;
+
+export type EntryPatch = Partial<Pick<Entry, 'table' | 'seat' | 'bustSeq' | 'rebuys' | 'addOn' | 'paidOut'>>;
 
 export interface ActionLogEntry {
   id: Id;

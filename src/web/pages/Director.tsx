@@ -4,9 +4,10 @@ import { useClockView, useLiveTournament } from '../live';
 import { formatClock } from '../../shared/clock';
 import type { ClockCommand } from '../../shared/types';
 import { blindsText } from '../format';
+import { MoneySettings, PayoutEditor } from './MoneySettings';
 
 export function Director({ id }: { id: number }) {
-  const { tournament: t, setTournament, offset, connected } = useLiveTournament(id);
+  const { tournament: t, entries, setTournament, offset, connected } = useLiveTournament(id);
   const view = useClockView(t, offset);
   const [error, setError] = useState('');
 
@@ -31,6 +32,9 @@ export function Director({ id }: { id: number }) {
           <a href={`/floor/${id}`}>Floor</a>
           <a href={`/display/${id}`} target="_blank" rel="noreferrer">
             Open big screen
+          </a>
+          <a href={`/payouts/${id}`} target="_blank" rel="noreferrer">
+            Payout screen
           </a>
         </nav>
       </header>
@@ -58,6 +62,9 @@ export function Director({ id }: { id: number }) {
         </div>
         {error && <p className="error">{error}</p>}
       </section>
+
+      <PayoutEditor t={t} entries={entries} />
+      <MoneySettings t={t} />
 
       <section className="card">
         <h2>Structure</h2>

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useClockView, useLiveTournament } from '../live';
 import { formatClock } from '../../shared/clock';
 import { blindsText, num } from '../format';
-import { fieldStats } from '../../shared/seating';
+import { isAlive } from '../../shared/seating';
+import { averageStack, moneySummary, payoutsFor } from '../../shared/money';
 
 /** Short two-tone chime played on the big screen when a level changes. */
 function chime(ctx: AudioContext) {
@@ -42,7 +43,9 @@ export function Display({ id }: { id: number }) {
   if (!t || !view) return <div className="display" data-theme={theme}>Connecting...</div>;
   const isBreak = view.level?.kind === 'break';
   const lowTime = view.running && view.remainingMs < 60_000;
-  const stats = fieldStats(entries, t.startingStack);
+  const remaining = entries.filter(isAlive).length;
+  const pool = moneySummary(t, entries).prizePool;
+  const paid = payoutsFor(t, entries).filter((p) => p > 0).length;
 
   return (
     <div className="display" data-theme={theme} onClick={enable}>
@@ -58,16 +61,19 @@ export function Display({ id }: { id: number }) {
       <footer className="display-stats">
         <div>
           <span>Players</span>
-          {stats.remaining} / {stats.entries}
+          {remaining} / {entries.length}
         </div>
         <div>
           <span>Average stack</span>
-          {num(stats.averageStack)}
+          {num(averageStack(t, entries))}
         </div>
         <div>
-          <span>Buy-in</span>
-          {num(t.buyIn)}
-          {t.fee ? ` + ${num(t.fee)}` : ''}
+          <span>Prize pool</span>
+          {num(pool)}
+        </div>
+        <div>
+          <span>Places paid</span>
+          {pool > 0 ? paid : '-'}
         </div>
       </footer>
       {!soundOn && <div className="display-hint">Click anywhere for full screen and sound</div>}

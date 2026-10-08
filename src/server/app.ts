@@ -5,8 +5,10 @@ import { existsSync } from 'node:fs';
 import type { Storage } from './storage/storage.js';
 import { Hub } from './hub.js';
 import { registerFloorRoutes } from './floor.js';
+import { registerDeskRoutes, validMoney } from './desk.js';
+import { createActionRunner } from './actions.js';
 import { applyClockCommand, clockAt, initialClock } from '../shared/clock.js';
-import type { ClockCommand, Id, Level, NewPlayer, TableConfig } from '../shared/types.js';
+import type { ClockCommand, Id, Level, MoneyConfig, NewPlayer, TableConfig } from '../shared/types.js';
 import type { Rand } from '../shared/seating.js';
 
 export interface AppOptions {
@@ -44,7 +46,9 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
     const t = await storage.getTournament(id);
     if (t) hub.publish(t, await storage.listEntries(id));
   };
-  registerFloorRoutes(app, storage, publish, rand);
+  const run = createActionRunner(storage, publish);
+  registerFloorRoutes(app, storage, run, rand);
+  registerDeskRoutes(app, storage, run, rand);
 
   app.get('/api/time', async () => ({ serverTime: Date.now() }));
 
@@ -95,12 +99,16 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
       theme?: string;
       tableCount?: number;
       seatsPerTable?: number;
+      money?: MoneyConfig;
     };
   }>('/api/tournaments', async (req, reply) => {
     const b = req.body ?? {};
     if (!b.name?.trim()) return reply.code(400).send({ error: 'name is required' });
     const structure = (await storage.listStructures()).find((s) => s.id === b.structureId);
     if (!structure) return reply.code(400).send({ error: 'unknown blind structure' });
+    if (b.money !== undefined && !validMoney(b.money)) {
+      return reply.code(400).send({ error: 'money settings must all be whole numbers of 0 or more' });
+    }
     const tableCount = Number(b.tableCount ?? 0);
     const seatsPerTable = Number(b.seatsPerTable ?? 9);
     if (!(tableCount >= 0 && tableCount <= 50 && seatsPerTable >= 2 && seatsPerTable <= 12)) {
@@ -120,6 +128,7 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
         levels: structure.levels,
         theme: b.theme,
         tables,
+        money: b.money,
       },
       initialClock(Date.now()),
     );

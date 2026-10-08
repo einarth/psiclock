@@ -3,13 +3,14 @@ import type {
   BlindStructure,
   ClockState,
   Entry,
+  EntryPatch,
   Id,
   NewBlindStructure,
   NewPlayer,
   NewTournament,
   Player,
-  TableConfig,
   Tournament,
+  TournamentPatch,
   TournamentStatus,
 } from '../../shared/types.js';
 
@@ -37,12 +38,12 @@ export interface Storage {
   getTournament(id: Id): Promise<Tournament | null>;
   createTournament(t: NewTournament, clock: ClockState): Promise<Tournament>;
   updateTournamentClock(id: Id, clock: ClockState, status: TournamentStatus): Promise<void>;
-  updateTournament(id: Id, patch: { tables?: TableConfig[]; handForHand?: boolean }): Promise<void>;
+  updateTournament(id: Id, patch: TournamentPatch): Promise<void>;
 
   /** Entries with the player's name filled in. */
   listEntries(tournamentId: Id): Promise<Entry[]>;
   createEntry(tournamentId: Id, playerId: Id, seat: { table: number; seat: number }): Promise<Entry>;
-  updateEntry(id: Id, patch: { table: number | null; seat: number | null; bustSeq: number | null }): Promise<void>;
+  updateEntry(id: Id, patch: EntryPatch): Promise<void>;
 
   appendAction(e: Omit<ActionLogEntry, 'id' | 'createdAt'>): Promise<ActionLogEntry>;
   listActions(tournamentId: Id): Promise<ActionLogEntry[]>;

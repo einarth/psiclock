@@ -29,6 +29,9 @@ const entry = (table: number | null, seat: number | null, bustSeq: number | null
   table,
   seat,
   bustSeq,
+  rebuys: 0,
+  addOn: false,
+  paidOut: 0,
   createdAt: '',
 });
 
