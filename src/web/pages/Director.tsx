@@ -6,9 +6,10 @@ import type { ClockCommand } from '../../shared/types';
 import { blindsText } from '../format';
 import { MoneySettings, PayoutEditor } from './MoneySettings';
 import { ScreenControl } from './ScreenControl';
+import { SaveTemplate } from './SaveTemplate';
 
 export function Director({ id }: { id: number }) {
-  const { tournament: t, entries, setTournament, offset, connected } = useLiveTournament(id);
+  const { tournament: t, entries, moves, setTournament, offset, connected } = useLiveTournament(id);
   const view = useClockView(t, offset);
   const [error, setError] = useState('');
 
@@ -64,7 +65,7 @@ export function Director({ id }: { id: number }) {
         {error && <p className="error">{error}</p>}
       </section>
 
-      <ScreenControl t={t} offset={offset} />
+      <ScreenControl t={t} entries={entries} moves={moves} offset={offset} />
       <PayoutEditor t={t} entries={entries} />
       <MoneySettings t={t} />
 
@@ -100,6 +101,8 @@ export function Director({ id }: { id: number }) {
           </tbody>
         </table>
       </section>
+
+      <SaveTemplate t={t} />
     </main>
   );
 }

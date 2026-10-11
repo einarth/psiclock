@@ -20,7 +20,8 @@ type Sheet =
   | { kind: 'player'; entry: Entry }
   | { kind: 'move'; entry: Entry; suggested?: number }
   | { kind: 'table'; table: TableConfig }
-  | { kind: 'confirm'; text: string; action: () => Promise<unknown>; danger?: boolean };
+  | { kind: 'confirm'; text: string; action: () => Promise<unknown>; danger?: boolean }
+  | { kind: 'handForHand' };
 
 /** The floor manager's phone or tablet view: bust players, move them, balance and break tables. */
 export function Floor({ id }: { id: number }) {
@@ -104,7 +105,25 @@ export function Floor({ id }: { id: number }) {
           <span>{blindsText(view.level)}</span>
         </div>
         {!connected && <div className="floor-alert danger">Lost connection, reconnecting...</div>}
-        {t.handForHand && <div className="floor-alert hfh">Hand for hand</div>}
+        {t.handForHand ? (
+          <div className="floor-alert hfh">
+            <span>Playing hand for hand</span>
+            <button
+              onClick={() =>
+                act(
+                  () => api.handForHand(id, false),
+                  view.running || t.status !== 'running' ? 'Hand-for-hand play stopped' : 'Hand-for-hand play stopped, clock restarted',
+                )
+              }
+            >
+              Stop hand-for-hand play
+            </button>
+          </div>
+        ) : (
+          <button className="floor-hfh-start" onClick={() => setSheet({ kind: 'handForHand' })}>
+            Play hand for hand
+          </button>
+        )}
       </header>
 
       {error && (
@@ -147,13 +166,7 @@ export function Floor({ id }: { id: number }) {
       )}
 
       <div className="floor-tools">
-        <input placeholder="Find player" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <button
-          className={t.handForHand ? 'primary' : ''}
-          onClick={() => act(() => api.handForHand(id, !t.handForHand))}
-        >
-          Hand for hand {t.handForHand ? 'on' : 'off'}
-        </button>
+        <input type="search" placeholder="Find player" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <section className="floor-tables">
@@ -285,6 +298,31 @@ export function Floor({ id }: { id: number }) {
                 >
                   Break this table
                 </button>
+              </>
+            )}
+            {sheet.kind === 'handForHand' && (
+              <>
+                <p className="sheet-question">Pause the clock while playing hand for hand?</p>
+                {view.running ? (
+                  <>
+                    <button
+                      className="primary big"
+                      onClick={() => act(() => api.handForHand(id, true, true), 'Hand for hand started, clock paused')}
+                    >
+                      Yes, pause the clock
+                    </button>
+                    <button className="big" onClick={() => act(() => api.handForHand(id, true, false), 'Hand for hand started')}>
+                      No, keep the clock running
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="muted">The clock is already paused. It restarts when hand-for-hand play stops.</p>
+                    <button className="primary big" onClick={() => act(() => api.handForHand(id, true), 'Hand for hand started')}>
+                      Start hand for hand
+                    </button>
+                  </>
+                )}
               </>
             )}
             {sheet.kind === 'confirm' && (

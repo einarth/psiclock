@@ -87,110 +87,189 @@ export function ScreenView(props: ScreenProps) {
   );
 }
 
+interface Panel {
+  label?: string;
+  body: ReactNode;
+  /** Share of a side column's height. */
+  grow?: number;
+}
+
+/**
+ * The clock screen, built from framed panels. The centre panel holds the
+ * clock. Side columns are always the same width as each other, so the clock
+ * stays in the middle of the screen even when only one side has something in
+ * it. Top and bottom bars share their width equally between their panels.
+ */
 function ClockScene({ d }: { d: Data }) {
-  const shown = Object.fromEntries(zones.map((z) => [z, d.layout.zones[z].filter((w) => visible(w, d))])) as Record<
-    Zone,
-    Widget[]
-  >;
+  const panels = Object.fromEntries(
+    zones.map((z) => [
+      z,
+      d.layout.zones[z]
+        .filter((w) => visible(w, d))
+        .map((w) => ({ w, p: panelFor(w, d) }))
+        .filter((x): x is { w: Widget; p: Panel } => x.p !== null),
+    ]),
+  ) as Record<Zone, { w: Widget; p: Panel }[]>;
+  const center = d.layout.zones.center.filter((w) => visible(w, d));
+  const sides = panels.left.length > 0 || panels.right.length > 0;
   const style = {
-    '--left': shown.left.length ? '24cqw' : '0px',
-    '--right': shown.right.length ? '24cqw' : '0px',
+    '--side': sides ? '23cqw' : '0px',
+    '--col-gap': sides ? '1.4cqw' : '0px',
+    '--top': panels.top.length ? '10cqh' : '0px',
+    '--bottom': panels.bottom.length ? '13cqh' : '0px',
+    '--row-gap-top': panels.top.length ? '1.6cqh' : '0px',
+    '--row-gap-bottom': panels.bottom.length ? '1.6cqh' : '0px',
   } as CSSProperties;
+  const bar = (z: 'top' | 'bottom') => (
+    <div className={`zone zone-${z}`} style={{ '--n': Math.max(1, panels[z].length) } as CSSProperties}>
+      {panels[z].map(({ w, p }, i) => (
+        <PanelView key={i} type={w.type} p={p} />
+      ))}
+    </div>
+  );
+  const column = (z: 'left' | 'right') => (
+    <div className={`zone zone-${z}`}>
+      {panels[z].map(({ w, p }, i) => (
+        <PanelView key={i} type={w.type} p={p} />
+      ))}
+    </div>
+  );
   return (
     <div className="zones" style={style}>
-      {zones.map((z) => (
-        <div key={z} className={`zone zone-${z}`}>
-          {z === 'center' && d.t.handForHand && <div className="w-hfh">Hand for hand</div>}
-          {shown[z].map((w, i) => (
-            <WidgetView key={i} w={w} d={d} />
-          ))}
-        </div>
-      ))}
+      {bar('top')}
+      {column('left')}
+      <div className="zone zone-center">
+        <MainPanel widgets={center} d={d} />
+      </div>
+      {column('right')}
+      {bar('bottom')}
     </div>
   );
 }
 
-const Stat = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="w-stat">
-    <span>{label}</span>
-    {children}
-  </div>
-);
+function PanelView({ type, p }: { type: string; p: Panel }) {
+  return (
+    <div className={`panel panel-${type}`} style={{ flexGrow: p.grow ?? 1 }}>
+      {p.label && <div className="panel-label">{p.label}</div>}
+      <div className="panel-body">{p.body}</div>
+    </div>
+  );
+}
 
-function WidgetView({ w, d }: { w: Widget; d: Data }) {
+/** The big centre panel: level band on top, then the clock, blinds and next level. */
+function MainPanel({ widgets, d }: { widgets: Widget[]; d: Data }) {
   const { t, view } = d;
+  const has = (type: Widget['type']) => widgets.some((w) => w.type === type);
+  const others = widgets.filter((w) => !['level', 'clock', 'blinds', 'next'].includes(w.type));
+  const low = view.running && view.remainingMs < 60_000;
+  const breakNote = view.level?.kind === 'break' ? view.level.note : '';
+  if (!widgets.length && !t.handForHand) return null;
+  return (
+    <div className="panel panel-main">
+      {(has('level') || t.handForHand) && (
+        <div className={`main-band${t.handForHand ? ' hfh' : ''}`}>
+          {has('level') && <span>{d.isBreak ? 'Break' : `Level ${view.levelNumber}`}</span>}
+          {t.handForHand && <span className="main-hfh">Hand for hand</span>}
+        </div>
+      )}
+      <div className="main-body">
+        {has('clock') && (
+          <div className="main-clock-box">
+            <div className={`main-clock${low ? ' low' : ''}${view.running ? '' : ' paused'}`}>{formatClock(view.remainingMs)}</div>
+            {!view.running && !view.finished && <div className="main-paused">{t.status === 'setup' ? 'Starting soon' : 'Paused'}</div>}
+          </div>
+        )}
+        {has('blinds') &&
+          (d.isBreak ? (
+            breakNote && <div className="main-note">{breakNote}</div>
+          ) : (
+            <div className="main-blinds">
+              <div>
+                <span>Blinds</span>
+                {view.level?.kind === 'level' ? `${num(view.level.smallBlind)} / ${num(view.level.bigBlind)}` : ''}
+              </div>
+              {view.level?.kind === 'level' && view.level.ante > 0 && (
+                <div>
+                  <span>Ante</span>
+                  {num(view.level.ante)}
+                </div>
+              )}
+            </div>
+          ))}
+        {others.map((w, i) => {
+          const p = panelFor(w, d);
+          return p && <div key={i} className="main-extra">{p.label && <span>{p.label}</span>}{p.body}</div>;
+        })}
+      </div>
+      {has('next') && (
+        <div className="main-next">
+          <span>Next</span> {view.nextLevel ? blindsText(view.nextLevel) : 'Final level'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What a widget shows when it sits in a frame of its own; null hides it. */
+function panelFor(w: Widget, d: Data): Panel | null {
+  const { t, view } = d;
+  const value = (v: ReactNode) => <div className="panel-value">{v}</div>;
   switch (w.type) {
     case 'title':
-      return <div className="w-title">{t.name}</div>;
+      return { body: <div className="panel-title">{t.name}</div> };
     case 'level':
-      return <div className="w-level">{d.isBreak ? 'Break' : `Level ${view.levelNumber}`}</div>;
-    case 'clock': {
-      const low = view.running && view.remainingMs < 60_000;
-      return (
-        <div className="w-clock-box">
-          <div className={`w-clock${low ? ' low' : ''}${view.running ? '' : ' paused'}`}>{formatClock(view.remainingMs)}</div>
-          {!view.running && !view.finished && <div className="w-paused">{t.status === 'setup' ? 'Starting soon' : 'Paused'}</div>}
-        </div>
-      );
-    }
+      return { label: 'Level', body: value(d.isBreak ? 'Break' : view.levelNumber) };
+    case 'clock':
+      return { label: d.isBreak ? 'Break ends in' : 'Level ends in', body: value(formatClock(view.remainingMs)) };
     case 'blinds':
-      return (
-        <div className="w-blinds">
-          {d.isBreak ? (view.level?.kind === 'break' && view.level.note) || '' : blindsText(view.level)}
-        </div>
-      );
+      return { label: 'Blinds', body: value(d.isBreak ? 'Break' : blindsText(view.level)) };
     case 'next':
-      return <div className="w-next">Next: {view.nextLevel ? blindsText(view.nextLevel) : 'final level'}</div>;
+      return { label: 'Next level', body: value(view.nextLevel ? blindsText(view.nextLevel) : 'Final level') };
     case 'players':
-      return (
-        <Stat label="Players">
-          {d.remaining} / {d.entries.length}
-        </Stat>
-      );
+      return { label: 'Players', body: value(`${d.remaining} / ${d.entries.length}`) };
     case 'avgStack':
-      return <Stat label="Average stack">{num(averageStack(t, d.entries))}</Stat>;
+      return { label: 'Average stack', body: value(num(averageStack(t, d.entries))) };
     case 'chips':
-      return <Stat label="Chips in play">{num(d.summary.totalChips)}</Stat>;
+      return { label: 'Chips in play', body: value(num(d.summary.totalChips)) };
     case 'prizePool':
-      return <Stat label="Prize pool">{num(d.summary.prizePool)}</Stat>;
+      return { label: 'Prize pool', body: value(num(d.summary.prizePool)) };
     case 'placesPaid':
-      return <Stat label="Places paid">{d.summary.prizePool > 0 ? d.prizes.length : '-'}</Stat>;
+      return { label: 'Places paid', body: value(d.summary.prizePool > 0 ? d.prizes.length : '-') };
     case 'buyIn':
-      return (
-        <Stat label="Buy-in">
-          {num(t.buyIn)}
-          {t.fee ? ` + ${num(t.fee)}` : ''}
-        </Stat>
-      );
+      return { label: 'Buy-in', body: value(`${num(t.buyIn)}${t.fee ? ` + ${num(t.fee)}` : ''}`) };
     case 'nextBreak': {
       const ms = msUntilNextBreak(t.levels, view);
-      return ms === null ? null : <Stat label="Next break">{formatClock(ms)}</Stat>;
+      return ms === null ? null : { label: 'Next break', body: value(formatClock(ms)) };
     }
     case 'lateReg': {
       const until = t.money.lateRegUntilLevel;
-      const ms = until ? msUntilEndOfLevel(t.levels, view, until) : null;
-      if (!until) return t.status === 'setup' ? <Stat label="Registration">Open</Stat> : null;
-      return ms === null ? <Stat label="Registration">Closed</Stat> : <Stat label="Late reg closes in">{formatClock(ms)}</Stat>;
+      if (!until) return t.status === 'setup' ? { label: 'Registration', body: value('Open') } : null;
+      const ms = msUntilEndOfLevel(t.levels, view, until);
+      return ms === null
+        ? { label: 'Registration', body: value('Closed') }
+        : { label: 'Late reg closes in', body: value(formatClock(ms)) };
     }
-    case 'payouts':
-      return <PayoutList d={d} />;
-    case 'bustouts':
-      return <Bustouts d={d} count={w.count ?? 5} />;
+    case 'payouts': {
+      if (!d.prizes.length || d.summary.prizePool === 0) return null;
+      return { label: 'Payouts', body: <PayoutList d={d} />, grow: Math.min(4, 1 + d.prizes.length / 4) };
+    }
+    case 'bustouts': {
+      const list = <Bustouts d={d} count={w.count ?? 5} />;
+      return d.entries.some((e) => e.bustSeq !== null) ? { label: 'Recent bustouts', body: list, grow: 1 + (w.count ?? 5) / 4 } : null;
+    }
     case 'sponsor':
-      return w.assetId ? <img className="w-sponsor" src={`/api/assets/${w.assetId}`} alt="Sponsor" /> : null;
+      return w.assetId ? { body: <img className="panel-sponsor" src={`/api/assets/${w.assetId}`} alt="Sponsor" />, grow: 2 } : null;
     case 'message':
-      return w.text ? <div className="w-message">{w.text}</div> : null;
+      return w.text ? { body: <div className="panel-message">{w.text}</div>, grow: 1.5 } : null;
   }
 }
 
 function PayoutList({ d }: { d: Data }) {
-  if (!d.prizes.length || d.summary.prizePool === 0) return null;
   const max = 18;
   const rows = d.prizes.slice(0, max);
-  const size = Math.max(1.8, Math.min(3.4, 64 / rows.length));
+  const lines = rows.length + (d.prizes.length > max ? 1 : 0);
   return (
-    <div className="w-payouts" style={{ fontSize: `${size}cqh` }}>
-      <div className="w-heading">Payouts</div>
+    <div className="w-list" style={{ '--rows': lines } as CSSProperties}>
       {rows.map((p, i) => (
         <div key={i} className={`w-row${d.placed.has(i + 1) ? ' done' : ''}`}>
           <span className="muted">{ordinal(i + 1)}</span>
@@ -211,10 +290,8 @@ function Bustouts({ d, count }: { d: Data; count: number }) {
     .filter((e) => e.bustSeq !== null)
     .sort((a, b) => b.bustSeq! - a.bustSeq!)
     .slice(0, count);
-  if (!out.length) return null;
   return (
-    <div className="w-bustouts">
-      <div className="w-heading">Recent bustouts</div>
+    <div className="w-list" style={{ '--rows': Math.max(out.length, Math.min(count, 5)) } as CSSProperties}>
       {out.map((e) => {
         const place = finishingPlace(d.entries, e)!;
         const prize = d.prizes[place - 1];
@@ -235,17 +312,19 @@ function OtherScene({ d }: { d: Data }) {
   const { view } = d;
   return (
     <div className="scene">
-      <header className="scene-head">
+      <header className="panel scene-head">
         <span className="scene-title">{d.t.name}</span>
         <span className="scene-clock">
           {d.isBreak ? 'Break' : `Level ${view.levelNumber}`} · {formatClock(view.remainingMs)}
           {!view.running && !view.finished && ' (paused)'}
         </span>
       </header>
-      {d.scene === 'seating' && <Seating d={d} />}
-      {d.scene === 'moves' && <Moves d={d} />}
-      {d.scene === 'payouts' && <PayoutBoard d={d} />}
-      {d.scene === 'message' && <div className="scene-message">{d.message || d.t.screen.message || ''}</div>}
+      <div className="panel scene-panel">
+        {d.scene === 'seating' && <Seating d={d} />}
+        {d.scene === 'moves' && <Moves d={d} />}
+        {d.scene === 'payouts' && <PayoutBoard d={d} />}
+        {d.scene === 'message' && <div className="scene-message">{d.message || d.t.screen.message || ''}</div>}
+      </div>
     </div>
   );
 }
@@ -311,7 +390,7 @@ export function PayoutBoard({ d }: { d: Data }) {
   return (
     <div className="payout-board">
       <div className="payout-pool">{num(d.summary.prizePool)}</div>
-      <div className="w-next">
+      <div className="payout-sub">
         {d.prizes.length} paid of {d.summary.entries} entries, {d.remaining} still in
       </div>
       <div className="payout-grid" style={{ '--rows': rows, fontSize: `${size}cqh` } as CSSProperties}>

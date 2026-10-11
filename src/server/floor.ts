@@ -10,7 +10,7 @@ import {
   seatForNewPlayer,
   type Rand,
 } from '../shared/seating.js';
-import { clockAt } from '../shared/clock.js';
+import { applyClockCommand, clockAt } from '../shared/clock.js';
 import { withinLevel } from '../shared/money.js';
 
 /** Registration, seating, bustouts and table moves. */
@@ -117,11 +117,22 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
     }),
   );
 
-  app.post<{ Params: P; Body: { on?: boolean } }>('/api/tournaments/:id/hand-for-hand', (req, reply) =>
+  /**
+   * Hand-for-hand on or off. Turning it on can pause the clock; turning it
+   * off restarts a paused clock, since play goes back to normal straight away.
+   */
+  app.post<{ Params: P; Body: { on?: boolean; pauseClock?: boolean } }>('/api/tournaments/:id/hand-for-hand', (req, reply) =>
     run(reply, Number(req.params.id), 'tournament.handForHand', 'floor', async ({ t }) => {
       const on = Boolean(req.body?.on);
+      const now = Date.now();
+      const view = clockAt(t.levels, t.clock, now);
+      const live = t.status === 'running' && !view.finished;
+      const command =
+        on && req.body?.pauseClock && view.running ? 'clock.pause' : !on && live && !view.running ? 'clock.start' : null;
+      if (command) await storage.updateTournamentClock(t.id, applyClockCommand(t.levels, t.clock, { type: command }, now), t.status);
       await storage.updateTournament(t.id, { handForHand: on });
-      return { result: { on }, payload: { on } };
+      const clock = command === 'clock.pause' ? 'paused' : command === 'clock.start' ? 'resumed' : 'unchanged';
+      return { result: { on, clock }, payload: { on, clock } };
     }),
   );
 }

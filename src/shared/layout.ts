@@ -101,23 +101,21 @@ export const zoneNames: Record<Zone, string> = {
   bottom: 'Bottom bar',
 };
 
-/** The built-in layout: the classic clock, with the payout table appearing once the money is final. */
+/**
+ * The built-in layout: tournament name across the top, the clock in the
+ * middle, field stats on the left and timings on the right. The payout table
+ * takes the place of the late-registration countdown once the money is final.
+ */
 export const defaultLayout: LayoutConfig = {
   theme: 'classic',
   colors: {},
   backgroundAssetId: null,
   zones: {
     top: [{ type: 'title' }],
-    left: [],
+    left: [{ type: 'players' }, { type: 'avgStack' }, { type: 'prizePool' }],
     center: [{ type: 'level' }, { type: 'clock' }, { type: 'blinds' }, { type: 'next' }],
-    right: [{ type: 'payouts', show: 'moneyFinal' }],
-    bottom: [
-      { type: 'players' },
-      { type: 'avgStack' },
-      { type: 'prizePool' },
-      { type: 'lateReg', show: 'moneyOpen' },
-      { type: 'nextBreak' },
-    ],
+    right: [{ type: 'nextBreak' }, { type: 'lateReg', show: 'moneyOpen' }, { type: 'payouts', show: 'moneyFinal' }],
+    bottom: [],
   },
 };
 

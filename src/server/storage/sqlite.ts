@@ -15,6 +15,8 @@ import type {
   Tournament,
   TournamentPatch,
   TournamentStatus,
+  TemplateConfig,
+  TournamentTemplate,
 } from '../../shared/types.js';
 import { defaultScreen } from '../../shared/types.js';
 import { defaultMoney } from '../../shared/money.js';
@@ -109,6 +111,12 @@ const migrations: string[] = [
    );
    ALTER TABLE tournaments ADD COLUMN layout_id INTEGER REFERENCES layouts(id) ON DELETE SET NULL;
    ALTER TABLE tournaments ADD COLUMN screen TEXT NOT NULL DEFAULT '{}';`,
+  `CREATE TABLE templates (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     config TEXT NOT NULL,
+     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+   );`,
 ];
 
 /** How each patchable field is stored: column name and conversion to a SQLite value. */
@@ -201,6 +209,11 @@ const toLayout = (r: Row): ScreenLayout => ({
   name: String(r.name),
   updatedAt: String(r.updated_at),
 });
+
+const toTemplate = (r: Row): TournamentTemplate => {
+  const c = JSON.parse(String(r.config)) as TemplateConfig;
+  return { ...c, money: { ...defaultMoney, ...c.money }, id: Number(r.id), name: String(r.name), updatedAt: String(r.updated_at) };
+};
 
 const toAsset = (r: Row): Asset => ({
   id: Number(r.id),
@@ -342,8 +355,8 @@ export class SqliteStorage implements Storage {
   async createTournament(t: NewTournament, clock: ClockState) {
     const r = this.db
       .prepare(
-        `INSERT INTO tournaments (name, buy_in, fee, starting_stack, levels, clock, theme, tables, money)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+        `INSERT INTO tournaments (name, buy_in, fee, starting_stack, levels, clock, theme, tables, money, payouts, layout_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
       )
       .get(
         t.name,
@@ -355,6 +368,8 @@ export class SqliteStorage implements Storage {
         t.theme ?? 'classic',
         JSON.stringify(t.tables ?? []),
         JSON.stringify({ ...defaultMoney, ...t.money }),
+        t.payouts ? JSON.stringify(t.payouts) : null,
+        t.layoutId ?? null,
       ) as Row;
     return toTournament(r);
   }
@@ -501,6 +516,30 @@ export class SqliteStorage implements Storage {
   async deleteLayout(id: Id) {
     this.db.prepare('UPDATE tournaments SET layout_id = NULL WHERE layout_id = ?').run(id);
     this.db.prepare('DELETE FROM layouts WHERE id = ?').run(id);
+  }
+
+  async listTemplates() {
+    return (this.db.prepare('SELECT * FROM templates ORDER BY name COLLATE NOCASE').all() as Row[]).map(toTemplate);
+  }
+
+  async getTemplate(id: Id) {
+    const r = this.db.prepare('SELECT * FROM templates WHERE id = ?').get(id) as Row | undefined;
+    return r ? toTemplate(r) : null;
+  }
+
+  async saveTemplate(name: string, config: TemplateConfig) {
+    const r = this.db
+      .prepare(
+        `INSERT INTO templates (name, config) VALUES (?, ?)
+         ON CONFLICT(name) DO UPDATE SET config = excluded.config, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         RETURNING *`,
+      )
+      .get(name.trim(), JSON.stringify(config)) as Row;
+    return toTemplate(r);
+  }
+
+  async deleteTemplate(id: Id) {
+    this.db.prepare('DELETE FROM templates WHERE id = ?').run(id);
   }
 
   async listAssets() {

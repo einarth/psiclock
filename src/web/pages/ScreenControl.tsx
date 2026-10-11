@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { useServerNow } from '../live';
-import { currentScene } from '../screen/ScreenView';
-import type { ScreenLayout } from '../../shared/layout';
-import type { Scene, Tournament } from '../../shared/types';
+import { useClockView, useServerNow } from '../live';
+import { ScreenView, currentScene } from '../screen/ScreenView';
+import { defaultLayout, type ScreenLayout } from '../../shared/layout';
+import type { Entry, Move, Scene, Tournament } from '../../shared/types';
 
 const sceneNames: Record<Scene, string> = {
   clock: 'Clock',
@@ -14,9 +14,12 @@ const sceneNames: Record<Scene, string> = {
 };
 
 /** Director card: what the big screens show right now, and which layout they use. */
-export function ScreenControl({ t, offset }: { t: Tournament; offset: number }) {
+export function ScreenControl({ t, entries, moves, offset }: { t: Tournament; entries: Entry[]; moves: Move[]; offset: number }) {
   const now = useServerNow(offset);
+  const view = useClockView(t, offset);
   const [layouts, setLayouts] = useState<ScreenLayout[]>([]);
+  const [pick, setPick] = useState<number | null>(t.layoutId);
+  const [applied, setApplied] = useState('');
   const [seconds, setSeconds] = useState(60);
   const [message, setMessage] = useState(t.screen.message ?? '');
   const [error, setError] = useState('');
@@ -26,6 +29,16 @@ export function ScreenControl({ t, offset }: { t: Tournament; offset: number }) 
   useEffect(() => {
     api.layouts().then(setLayouts);
   }, []);
+  // Follow changes made from another device.
+  useEffect(() => setPick(t.layoutId), [t.layoutId]);
+
+  const picked = layouts.find((l) => l.id === pick) ?? null;
+  const editUrl = `/layouts?tournament=${t.id}${pick ? `&layout=${pick}` : ''}`;
+  const apply = () =>
+    act(async () => {
+      await api.updateTournament(t.id, { layoutId: pick });
+      setApplied(`The screens now use ${picked ? `"${picked.name}"` : 'the built-in layout'}.`);
+    });
 
   const act = async (fn: () => Promise<unknown>) => {
     setError('');
@@ -73,23 +86,48 @@ export function ScreenControl({ t, offset }: { t: Tournament; offset: number }) 
             <option value={0}>Never, stay until changed</option>
           </select>
         </label>
-        <label>
-          Screen layout
-          <span className="row-actions">
-            <select
-              value={t.layoutId ?? ''}
-              onChange={(e) => act(() => api.updateTournament(t.id, { layoutId: e.target.value ? Number(e.target.value) : null }))}
-            >
+      </div>
+      <div className="layout-switch">
+        <div className="layout-thumb">
+          {view && (
+            <ScreenView
+              t={t}
+              entries={entries}
+              view={view}
+              layout={picked ?? defaultLayout}
+              moves={moves}
+              now={now}
+              scene="clock"
+            />
+          )}
+        </div>
+        <div className="stack-form">
+          <label>
+            Screen layout
+            <select value={pick ?? ''} onChange={(e) => (setApplied(''), setPick(e.target.value ? Number(e.target.value) : null))}>
               <option value="">Built-in</option>
               {layouts.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}
+                  {l.id === t.layoutId ? ' (on screen now)' : ''}
                 </option>
               ))}
             </select>
-            <a href="/layouts">Edit layouts</a>
+          </label>
+          <span className="row-actions">
+            <button className="primary" disabled={pick === t.layoutId} onClick={apply}>
+              Apply to screens
+            </button>
+            <a className="button" href={editUrl}>
+              {pick ? 'Edit this layout' : 'Customise'}
+            </a>
           </span>
-        </label>
+          {pick !== t.layoutId ? (
+            <span className="muted small">Preview only. The screens change when you press Apply.</span>
+          ) : (
+            applied && <span className="paid small">{applied}</span>
+          )}
+        </div>
       </div>
       <label className="inline check">
         <input

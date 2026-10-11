@@ -8,6 +8,7 @@ import type {
   Tournament,
   TournamentPatch,
   ScreenState,
+  TournamentTemplate,
 } from '../shared/types';
 import type { Role, User } from '../shared/auth';
 import type { LayoutConfig, ScreenLayout } from '../shared/layout';
@@ -93,6 +94,8 @@ export const api = {
     fee: number;
     startingStack: number;
     structureId: number;
+    templateId?: number;
+    fromTournamentId?: number;
     theme: string;
     tableCount: number;
     seatsPerTable: number;
@@ -116,5 +119,9 @@ export const api = {
   addTable: (id: number, seats?: number) => call<{ number: number }>('POST', `/api/tournaments/${id}/tables`, { seats }),
   breakTable: (id: number, table: number) => call<unknown>('POST', `/api/tournaments/${id}/tables/${table}/break`),
   redraw: (id: number, table: number) => call<unknown>('POST', `/api/tournaments/${id}/tables/${table}/redraw`),
-  handForHand: (id: number, on: boolean) => call<unknown>('POST', `/api/tournaments/${id}/hand-for-hand`, { on }),
+  handForHand: (id: number, on: boolean, pauseClock = false) =>
+    call<{ on: boolean; clock: 'paused' | 'resumed' | 'unchanged' }>('POST', `/api/tournaments/${id}/hand-for-hand`, { on, pauseClock }),
+  templates: () => call<TournamentTemplate[]>('GET', '/api/templates'),
+  saveTemplate: (name: string, tournamentId: number) => call<TournamentTemplate>('POST', '/api/templates', { name, tournamentId }),
+  deleteTemplate: (id: number) => call<unknown>('DELETE', `/api/templates/${id}`, {}),
 };

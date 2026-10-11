@@ -12,6 +12,8 @@ import type {
   Tournament,
   TournamentPatch,
   TournamentStatus,
+  TemplateConfig,
+  TournamentTemplate,
 } from '../../shared/types.js';
 import type { Role, User } from '../../shared/auth.js';
 import type { LayoutConfig, ScreenLayout } from '../../shared/layout.js';
@@ -95,6 +97,12 @@ export interface Storage {
   updateLayout(id: Id, name: string, config: LayoutConfig): Promise<ScreenLayout | null>;
   /** Tournaments using the layout fall back to the built-in one. */
   deleteLayout(id: Id): Promise<void>;
+
+  listTemplates(): Promise<TournamentTemplate[]>;
+  getTemplate(id: Id): Promise<TournamentTemplate | null>;
+  /** Saving under a name that already exists replaces that template. */
+  saveTemplate(name: string, config: TemplateConfig): Promise<TournamentTemplate>;
+  deleteTemplate(id: Id): Promise<void>;
 
   listAssets(): Promise<Asset[]>;
   createAsset(name: string, mime: string, data: Uint8Array): Promise<Asset>;

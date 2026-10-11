@@ -9,6 +9,7 @@ import { registerDeskRoutes, validMoney } from './desk.js';
 import { createActionRunner } from './actions.js';
 import { actorOf, registerAuth } from './auth.js';
 import { MOVE_TYPES, layoutFor, movesFrom, registerScreenRoutes } from './screens.js';
+import { registerTemplateRoutes, templateFrom } from './templates.js';
 import { applyClockCommand, clockAt, initialClock } from '../shared/clock.js';
 import type { ClockCommand, Id, Level, MoneyConfig, NewPlayer, ServerMessage, TableConfig } from '../shared/types.js';
 import type { Rand } from '../shared/seating.js';
@@ -70,6 +71,7 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
   const run = createActionRunner(storage, publish);
   registerFloorRoutes(app, storage, run, rand);
   registerDeskRoutes(app, storage, run, rand);
+  registerTemplateRoutes(app, storage);
   registerScreenRoutes(app, storage, run, publishAll);
 
   app.get('/api/time', async () => ({ serverTime: Date.now() }));
@@ -118,6 +120,10 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
       fee?: number;
       startingStack?: number;
       structureId?: number;
+      /** Start from a saved template: its levels, money settings, payout table and layout. */
+      templateId?: number;
+      /** Or start from an earlier tournament the same way. */
+      fromTournamentId?: number;
       theme?: string;
       tableCount?: number;
       seatsPerTable?: number;
@@ -126,8 +132,14 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
   }>('/api/tournaments', async (req, reply) => {
     const b = req.body ?? {};
     if (!b.name?.trim()) return reply.code(400).send({ error: 'name is required' });
-    const structure = (await storage.listStructures()).find((s) => s.id === b.structureId);
-    if (!structure) return reply.code(400).send({ error: 'unknown blind structure' });
+    const source = b.fromTournamentId ? await storage.getTournament(Number(b.fromTournamentId)) : null;
+    if (b.fromTournamentId && !source) return reply.code(400).send({ error: 'tournament to copy not found' });
+    const template = source ? templateFrom(source) : b.templateId ? await storage.getTemplate(Number(b.templateId)) : null;
+    if (b.templateId && !template) return reply.code(400).send({ error: 'template not found' });
+    const structure = template ? null : (await storage.listStructures()).find((s) => s.id === b.structureId);
+    if (!template && !structure) return reply.code(400).send({ error: 'unknown blind structure' });
+    // A template's layout may have been deleted since it was saved.
+    const layoutId = template?.layoutId && (await storage.getLayout(template.layoutId)) ? template.layoutId : null;
     if (b.money !== undefined && !validMoney(b.money)) {
       return reply.code(400).send({ error: 'money settings must all be whole numbers of 0 or more' });
     }
@@ -147,10 +159,12 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
         buyIn: Number(b.buyIn ?? 0),
         fee: Number(b.fee ?? 0),
         startingStack: Number(b.startingStack ?? 0),
-        levels: structure.levels,
+        levels: template?.levels ?? structure!.levels,
         theme: b.theme,
         tables,
-        money: b.money,
+        money: b.money ?? template?.money,
+        payouts: template?.payouts ?? null,
+        layoutId,
       },
       initialClock(Date.now()),
     );

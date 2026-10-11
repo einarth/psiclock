@@ -143,7 +143,27 @@ export interface Move {
 }
 
 export type NewTournament = Pick<Tournament, 'name' | 'buyIn' | 'fee' | 'startingStack' | 'levels'> &
-  Partial<Pick<Tournament, 'theme' | 'tables' | 'money'>>;
+  Partial<Pick<Tournament, 'theme' | 'tables' | 'money' | 'payouts' | 'layoutId'>>;
+
+/** What a new tournament copies from a template: everything but the name, players and clock. */
+export interface TemplateConfig {
+  buyIn: number;
+  fee: number;
+  startingStack: number;
+  levels: Level[];
+  tableCount: number;
+  seatsPerTable: number;
+  money: MoneyConfig;
+  payouts: number[] | null;
+  layoutId: Id | null;
+}
+
+/** A saved starting point for new tournaments. */
+export interface TournamentTemplate extends TemplateConfig {
+  id: Id;
+  name: string;
+  updatedAt: string;
+}
 
 /** Fields the director can change after the tournament is created. */
 export type TournamentPatch = Partial<

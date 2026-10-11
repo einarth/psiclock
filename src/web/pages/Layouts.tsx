@@ -101,13 +101,26 @@ export function Layouts() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const loadLayouts = () => api.layouts().then(setLayouts);
+  // Opened from a tournament's Big screens card: edit that tournament's layout and preview it.
+  const params = new URLSearchParams(location.search);
+  const forId = Number(params.get('tournament')) || 0;
+  const startLayout = Number(params.get('layout')) || 0;
+  const forTournament = tournaments.find((t) => t.id === forId) ?? null;
+
+  const loadLayouts = () => api.layouts().then((list) => (setLayouts(list), list));
   useEffect(() => {
-    loadLayouts();
+    loadLayouts().then((list) => {
+      const l = list.find((x) => x.id === startLayout);
+      if (l) {
+        const next = { id: l.id, name: l.name, config: configOf(l) };
+        setEditing(next);
+        setSaved(JSON.stringify(next));
+      }
+    });
     api.assets().then(setAssets);
     api.tournaments().then((list) => {
       setTournaments(list);
-      setPreviewId(list[0]?.id ?? 0);
+      setPreviewId(forId || (list[0]?.id ?? 0));
     });
   }, []);
 
@@ -137,7 +150,14 @@ export function Layouts() {
       const next = { id: l.id, name: l.name, config: configOf(l) };
       setEditing(next);
       setSaved(JSON.stringify(next));
-      setMessage('Saved. Screens using this layout update straight away.');
+      // A layout made from the built-in one for a tournament goes straight onto its screens.
+      if (forTournament && !editing.id && forTournament.layoutId === null) {
+        await api.updateTournament(forTournament.id, { layoutId: l.id });
+        setTournaments((list) => list.map((t) => (t.id === forTournament.id ? { ...t, layoutId: l.id } : t)));
+        setMessage(`Saved and now on the screens for ${forTournament.name}.`);
+      } else {
+        setMessage('Saved. Screens using this layout have updated.');
+      }
       loadLayouts();
     } catch (err) {
       setError((err as Error).message);
@@ -177,6 +197,31 @@ export function Layouts() {
       </header>
 
       <section className="card">
+        {forTournament && (
+          <div className="editing-for form-actions">
+            <span>
+              {forTournament.layoutId === editing.id && editing.id
+                ? `This layout is on the screens for ${forTournament.name}. Saving updates them straight away.`
+                : forTournament.layoutId === null && !editing.id
+                  ? `${forTournament.name} uses the built-in layout. Saving makes this its layout.`
+                  : `This layout is not the one on the screens for ${forTournament.name}.`}
+            </span>
+            {editing.id && forTournament.layoutId !== editing.id && (
+              <button
+                disabled={dirty}
+                title={dirty ? 'Save your changes first' : undefined}
+                onClick={async () => {
+                  await api.updateTournament(forTournament.id, { layoutId: editing.id });
+                  setTournaments((list) => list.map((t) => (t.id === forTournament.id ? { ...t, layoutId: editing.id } : t)));
+                  setMessage(`Now on the screens for ${forTournament.name}.`);
+                }}
+              >
+                Use it for {forTournament.name}
+              </button>
+            )}
+            <a href={`/director/${forTournament.id}`}>Back to {forTournament.name}</a>
+          </div>
+        )}
         <div className="form-actions layout-picker">
           <label className="inline">
             Layout
@@ -206,7 +251,9 @@ export function Layouts() {
             <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
           </label>
           <button className="primary" onClick={save} disabled={!dirty && !!editing.id}>
-            Save layout
+            {forTournament && (forTournament.layoutId === editing.id || (!editing.id && forTournament.layoutId === null))
+              ? 'Save and update screens'
+              : 'Save layout'}
           </button>
           {editing.id && (
             <button className="danger-link link" onClick={remove}>
@@ -300,8 +347,9 @@ export function Layouts() {
         <section className="card">
           <h2>What goes where</h2>
           <p className="muted small">
-            The centre holds the clock. Side columns only take up room when something in them is showing, so a payout
-            table set to appear after registration closes stays out of the way until then.
+            Each item gets its own frame. The centre frame holds the level, clock, blinds and next level. The two side
+            columns are always the same width, so the clock stays in the middle; they only take up room when something in
+            either of them is showing. Items in the top and bottom bars share the width equally.
           </p>
           <div className="zone-grid">
             {zones.map((z) => (

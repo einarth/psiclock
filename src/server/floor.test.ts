@@ -94,4 +94,38 @@ describe('floor actions', () => {
     await post(`/api/tournaments/${tid}/hand-for-hand`, { on: true });
     expect((await storage.getTournament(tid))!.handForHand).toBe(true);
   });
+
+  it('pauses the clock for hand-for-hand when asked and restarts it afterwards', async () => {
+    await post(`/api/tournaments/${tid}/clock`, { type: 'clock.start' });
+    expect((await post(`/api/tournaments/${tid}/hand-for-hand`, { on: true, pauseClock: true })).body.clock).toBe('paused');
+    let t = (await storage.getTournament(tid))!;
+    expect(t.handForHand).toBe(true);
+    expect(t.clock.running).toBe(false);
+    expect((await post(`/api/tournaments/${tid}/hand-for-hand`, { on: false })).body.clock).toBe('resumed');
+    t = (await storage.getTournament(tid))!;
+    expect(t.handForHand).toBe(false);
+    expect(t.clock.running).toBe(true);
+    // Without pauseClock the clock keeps running.
+    expect((await post(`/api/tournaments/${tid}/hand-for-hand`, { on: true })).body.clock).toBe('unchanged');
+    expect((await storage.getTournament(tid))!.clock.running).toBe(true);
+  });
+
+  it('saves a tournament as a template and starts a new one from it', async () => {
+    await app.inject({ method: 'PATCH', url: `/api/tournaments/${tid}`, payload: { buyIn: 15000, payouts: [60, 40] }, headers: { cookie } });
+    const saved = await post('/api/templates', { name: 'Monday', tournamentId: tid });
+    expect(saved.status).toBe(201);
+    expect(saved.body).toMatchObject({ name: 'Monday', buyIn: 15000, tableCount: 2, seatsPerTable: 3, payouts: [60, 40] });
+    // Saving again under the same name replaces it.
+    expect((await post('/api/templates', { name: 'monday', tournamentId: tid })).body.id).toBe(saved.body.id);
+    const t = await post('/api/tournaments', { name: 'Next Monday', templateId: saved.body.id, buyIn: 15000, tableCount: 2, seatsPerTable: 3 });
+    expect(t.status).toBe(201);
+    expect(t.body.payouts).toEqual([60, 40]);
+    expect(t.body.levels).toEqual((await storage.getTournament(tid))!.levels);
+    const copy = await post('/api/tournaments', { name: 'Copy', fromTournamentId: tid, tableCount: 1, seatsPerTable: 9 });
+    expect(copy.body).toMatchObject({ payouts: [60, 40], levels: t.body.levels });
+    const list = (await app.inject({ url: '/api/templates', headers: { cookie } })).json();
+    expect(list).toHaveLength(1);
+    await app.inject({ method: 'DELETE', url: `/api/templates/${saved.body.id}`, headers: { cookie } });
+    expect((await app.inject({ url: '/api/templates', headers: { cookie } })).json()).toHaveLength(0);
+  });
 });
