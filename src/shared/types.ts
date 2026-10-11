@@ -82,6 +82,9 @@ export interface Entry {
 
 /** Rebuy, add-on, late registration and payout rules. A limit of 0 means no limit. */
 export interface MoneyConfig {
+  /** Rebuys are switched on explicitly; a freezeout leaves this off. */
+  allowRebuys: boolean;
+  allowAddOn: boolean;
   rebuyPrice: number;
   rebuyFee: number;
   rebuyChips: number;

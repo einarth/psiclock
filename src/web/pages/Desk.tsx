@@ -94,7 +94,7 @@ export function Desk({ id }: { id: number }) {
   const summary = moneySummary(t, entries);
   const remaining = entries.filter(isAlive).length;
   const regOpen = withinLevel(view.levelNumber, m.lateRegUntilLevel);
-  const rebuyOpen = m.rebuyPrice > 0 && withinLevel(view.levelNumber, m.rebuyUntilLevel);
+  const rebuyOpen = m.allowRebuys && withinLevel(view.levelNumber, m.rebuyUntilLevel);
   const inTheMoney = entries
     .map((e) => ({ e, place: finishingPlace(entries, e) }))
     .filter((x): x is { e: Entry; place: number } => x.place !== null && (prizes[x.place - 1] ?? 0) > 0)
@@ -176,8 +176,8 @@ export function Desk({ id }: { id: number }) {
         <p className="muted small">
           Buy-in {num(t.buyIn)}
           {t.fee ? ` + ${num(t.fee)} fee` : ''}
-          {m.rebuyPrice > 0 && `, rebuy ${num(m.rebuyPrice + m.rebuyFee)}`}
-          {m.addOnPrice > 0 && `, add-on ${num(m.addOnPrice + m.addOnFee)}`}
+          {m.allowRebuys && `, rebuy ${num(m.rebuyPrice + m.rebuyFee)}`}
+          {m.allowAddOn && `, add-on ${num(m.addOnPrice + m.addOnFee)}`}
         </p>
       </section>
 
@@ -259,7 +259,7 @@ export function Desk({ id }: { id: number }) {
                   </span>
                 </span>
                 <span className="row-actions">
-                  {m.rebuyPrice > 0 && (
+                  {m.allowRebuys && (
                     <button onClick={() => rebuy(e)} className={rebuyOpen ? '' : 'muted'}>
                       Rebuy
                     </button>
@@ -269,7 +269,7 @@ export function Desk({ id }: { id: number }) {
                       Undo rebuy
                     </button>
                   )}
-                  {m.addOnPrice > 0 &&
+                  {m.allowAddOn &&
                     (e.addOn ? (
                       <button className="link" onClick={() => simple(() => api.addOn(id, e.id, true))}>
                         Undo add-on

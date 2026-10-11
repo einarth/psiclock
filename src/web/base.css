@@ -271,7 +271,12 @@ button.icon { padding: 2px 8px; }
 .upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 button.danger-link { color: var(--danger); }
 .scene-buttons { justify-content: flex-start; margin-bottom: 12px; }
-label.check { margin-top: 12px; color: var(--text); }
+label.check { flex-direction: row; align-items: center; gap: 8px; margin: 12px 0 8px; font-size: 0.95rem; color: var(--text); cursor: pointer; }
+label.check input { width: auto; margin: 0; }
+.levels-edit input { width: 100%; min-width: 64px; max-width: 120px; }
+.levels-edit input.break-note { max-width: none; }
+.levels-edit .row-actions { white-space: nowrap; }
+.levels-edit .row-actions button + button, .levels-edit .row-actions button + span { margin-left: 10px; }
 @media (max-width: 800px) {
   .zone-grid { grid-template-columns: 1fr; grid-template-areas: 'top' 'center' 'left' 'right' 'bottom'; }
 }

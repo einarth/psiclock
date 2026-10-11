@@ -1,17 +1,38 @@
 import type { FastifyInstance } from 'fastify';
 import type { Storage } from './storage/storage.js';
 import { ActionError, type RunAction } from './actions.js';
-import { clockAt } from '../shared/clock.js';
+import { clockAt, minutesToMs } from '../shared/clock.js';
 import { defaultMoney, payoutsFor, withinLevel } from '../shared/money.js';
 import { finishingPlace, freeSeats, isAlive, seatForNewPlayer, type Rand } from '../shared/seating.js';
-import type { MoneyConfig, TournamentPatch } from '../shared/types.js';
+import type { Level, MoneyConfig, TournamentPatch } from '../shared/types.js';
 
 const isCount = (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= 0;
 
 /** Some or all money settings: known keys only, each a whole number of 0 or more. */
 export function validMoney(m: unknown): m is Partial<MoneyConfig> {
   if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
-  return Object.entries(m).every(([k, v]) => k in defaultMoney && isCount(v));
+  return Object.entries(m).every(
+    ([k, v]) => k in defaultMoney && (typeof defaultMoney[k as keyof MoneyConfig] === 'boolean' ? typeof v === 'boolean' : isCount(v)),
+  );
+}
+
+/** A blind structure: at least one level, whole numbers, minutes above 0, big blind not below small. */
+export function validLevels(levels: unknown): levels is Level[] {
+  return (
+    Array.isArray(levels) &&
+    levels.length > 0 &&
+    levels.length <= 200 &&
+    levels.every(
+      (l) =>
+        l &&
+        typeof l.minutes === 'number' &&
+        l.minutes > 0 &&
+        l.minutes <= 600 &&
+        (l.kind === 'break'
+          ? l.note === undefined || (typeof l.note === 'string' && l.note.length <= 200)
+          : l.kind === 'level' && [l.smallBlind, l.bigBlind, l.ante].every(isCount) && l.bigBlind >= l.smallBlind),
+    )
+  );
 }
 
 function validPayouts(p: unknown): p is number[] | null {
@@ -42,7 +63,7 @@ export function registerDeskRoutes(app: FastifyInstance, storage: Storage, run: 
       }
       if (b.theme !== undefined) patch.theme = String(b.theme);
       if (b.money !== undefined) {
-        if (!validMoney(b.money)) throw new ActionError('money settings must all be whole numbers of 0 or more');
+        if (!validMoney(b.money)) throw new ActionError('money settings must be whole numbers of 0 or more');
         patch.money = { ...t.money, ...b.money };
       }
       if (b.layoutId !== undefined) {
@@ -58,11 +79,42 @@ export function registerDeskRoutes(app: FastifyInstance, storage: Storage, run: 
     }),
   );
 
+  // Edit the blind structure, also while the tournament runs. The client says
+  // where the level being played sits in the new list (expectedIndex is where
+  // it was), so the clock stays on that level with its time kept.
+  app.put<{ Params: P; Body: { levels?: unknown; currentIndex?: number; expectedIndex?: number } }>(
+    '/api/tournaments/:id/levels',
+    (req, reply) =>
+      run(reply, Number(req.params.id), 'tournament.levels', 'director', async ({ t }) => {
+        const { levels, currentIndex, expectedIndex } = req.body ?? {};
+        if (!validLevels(levels)) {
+          throw new ActionError('every level needs whole-number blinds (big blind at least the small blind) and minutes above 0');
+        }
+        const now = Date.now();
+        const view = clockAt(t.levels, t.clock, now);
+        if (expectedIndex !== view.levelIndex) {
+          throw new ActionError('the clock moved to another level while you were editing; check the structure and save again', 409);
+        }
+        if (!(Number.isInteger(currentIndex) && currentIndex! >= 0 && currentIndex! < levels.length)) {
+          throw new ActionError('the level being played cannot be deleted');
+        }
+        const elapsed = view.level ? minutesToMs(view.level.minutes) - view.remainingMs : 0;
+        const clock = {
+          running: view.running,
+          levelIndex: currentIndex!,
+          elapsedMs: view.finished ? 0 : Math.min(elapsed, minutesToMs(levels[currentIndex!].minutes)),
+          anchorAt: now,
+        };
+        await storage.updateTournamentLevels(t.id, levels, clock);
+        return { result: { levels, clock }, payload: { levels, currentIndex } };
+      }),
+  );
+
   app.post<{ Params: PE; Body: { force?: boolean } }>('/api/tournaments/:id/entries/:entryId/rebuy', (req, reply) =>
     run(reply, Number(req.params.id), 'entry.rebuy', 'desk', async ({ t, entries, entry }) => {
       const e = entry(req.params.entryId);
       const m = t.money;
-      if (m.rebuyPrice === 0) throw new ActionError('this tournament has no rebuys');
+      if (!m.allowRebuys) throw new ActionError('this tournament has no rebuys');
       const level = clockAt(t.levels, t.clock, Date.now()).levelNumber;
       if (!req.body?.force && !withinLevel(level, m.rebuyUntilLevel)) {
         throw new ActionError(`rebuys closed after level ${m.rebuyUntilLevel}`, 409);
@@ -95,7 +147,7 @@ export function registerDeskRoutes(app: FastifyInstance, storage: Storage, run: 
       const e = entry(req.params.entryId);
       const addOn = !req.body?.undo;
       if (addOn) {
-        if (t.money.addOnPrice === 0) throw new ActionError('this tournament has no add-on');
+        if (!t.money.allowAddOn) throw new ActionError('this tournament has no add-on');
         if (e.addOn) throw new ActionError(`${e.playerName} already has the add-on`);
         if (!isAlive(e)) throw new ActionError(`${e.playerName} is out`);
       }

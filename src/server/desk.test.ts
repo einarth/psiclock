@@ -4,7 +4,7 @@ import { buildApp } from './app';
 import { SqliteStorage } from './storage/sqlite';
 import { signedIn } from './testing';
 import { defaultStructures } from '../shared/structures';
-import { defaultMoney } from '../shared/money';
+import { defaultMoney, normalizeMoney } from '../shared/money';
 import type { Entry } from '../shared/types';
 
 describe('desk and money', () => {
@@ -12,7 +12,7 @@ describe('desk and money', () => {
   let storage: SqliteStorage;
   let tid: number;
   let cookie: string;
-  const money = { ...defaultMoney, rebuyPrice: 10000, rebuyChips: 20000, rebuyUntilLevel: 4, addOnPrice: 10000, addOnChips: 30000, lateRegUntilLevel: 4 };
+  const money = { ...defaultMoney, allowRebuys: true, allowAddOn: true, rebuyPrice: 10000, rebuyChips: 20000, rebuyUntilLevel: 4, addOnPrice: 10000, addOnChips: 30000, lateRegUntilLevel: 4 };
 
   const call = async (method: 'POST' | 'PATCH', url: string, payload?: object) => {
     const res = await app.inject({ method, url, payload: payload ?? {}, headers: { cookie } });
@@ -57,6 +57,44 @@ describe('desk and money', () => {
     expect((await entries())[0]).toMatchObject({ bustSeq: null, rebuys: 1 });
     await post(`/api/tournaments/${tid}/entries/${a.id}/rebuy/undo`);
     expect((await entries())[0].rebuys).toBe(0);
+  });
+
+  it('only allows rebuys and add-ons when they are switched on', async () => {
+    await call('PATCH', `/api/tournaments/${tid}`, { money: { allowRebuys: false, allowAddOn: false } });
+    const [a, b] = await entries();
+    await post(`/api/tournaments/${tid}/entries/${a.id}/bust`);
+    expect((await post(`/api/tournaments/${tid}/entries/${a.id}/rebuy`)).body.error).toMatch(/no rebuys/);
+    expect((await post(`/api/tournaments/${tid}/entries/${b.id}/add-on`)).body.error).toMatch(/no add-on/);
+    expect((await call('PATCH', `/api/tournaments/${tid}`, { money: { allowRebuys: 1 } })).status).toBe(400);
+  });
+
+  it('treats a rebuy price saved before the switch existed as rebuys on', () => {
+    expect(normalizeMoney({ rebuyPrice: 5000 }).allowRebuys).toBe(true);
+    expect(normalizeMoney({ rebuyPrice: 5000 }).allowAddOn).toBe(false);
+    expect(normalizeMoney({ rebuyPrice: 5000, allowRebuys: false }).allowRebuys).toBe(false);
+  });
+
+  it('edits the blind structure and keeps the clock on the level being played', async () => {
+    const put = (payload: object) => app.inject({ method: 'PUT', url: `/api/tournaments/${tid}/levels`, payload, headers: { cookie } });
+    await post(`/api/tournaments/${tid}/clock`, { type: 'clock.start' });
+    await post(`/api/tournaments/${tid}/clock`, { type: 'clock.setLevel', levelIndex: 2 });
+    const old = (await storage.getTournament(tid))!.levels;
+    // Drop the first level and add one in front of the current level: it moves from 2 to 2.
+    const extra = { kind: 'level', smallBlind: 150, bigBlind: 300, ante: 300, minutes: 20 };
+    const levels = [old[1], extra, ...old.slice(2)];
+    expect((await put({ levels, currentIndex: 2, expectedIndex: 2 })).statusCode).toBe(200);
+    let t = (await storage.getTournament(tid))!;
+    expect(t.levels[1]).toEqual(extra);
+    expect(t.clock.levelIndex).toBe(2);
+    expect(t.clock.running).toBe(true);
+    // The clock moved on since the editor opened.
+    expect((await put({ levels, currentIndex: 2, expectedIndex: 0 })).statusCode).toBe(409);
+    // Bad levels are refused.
+    const bad = [{ kind: 'level', smallBlind: 400, bigBlind: 200, ante: 0, minutes: 20 }];
+    expect((await put({ levels: bad, currentIndex: 0, expectedIndex: 2 })).statusCode).toBe(400);
+    expect((await put({ levels: [], currentIndex: 0, expectedIndex: 2 })).statusCode).toBe(400);
+    t = (await storage.getTournament(tid))!;
+    expect(t.levels).toEqual(levels);
   });
 
   it('gives each player one add-on at most', async () => {

@@ -2,6 +2,8 @@ import type { Entry, MoneyConfig, Tournament } from './types.js';
 import { isAlive } from './seating.js';
 
 export const defaultMoney: MoneyConfig = {
+  allowRebuys: false,
+  allowAddOn: false,
   rebuyPrice: 0,
   rebuyFee: 0,
   rebuyChips: 0,
@@ -13,6 +15,20 @@ export const defaultMoney: MoneyConfig = {
   guarantee: 0,
   rounding: 1000,
 };
+
+/**
+ * Fills in missing money settings. Tournaments saved before rebuys had their
+ * own switch counted a rebuy or add-on price above 0 as switched on.
+ */
+export function normalizeMoney(m: Partial<MoneyConfig> | undefined): MoneyConfig {
+  const raw = m ?? {};
+  return {
+    ...defaultMoney,
+    ...raw,
+    allowRebuys: raw.allowRebuys ?? (raw.rebuyPrice ?? 0) > 0,
+    allowAddOn: raw.allowAddOn ?? (raw.addOnPrice ?? 0) > 0,
+  };
+}
 
 export interface MoneySummary {
   entries: number;
@@ -95,5 +111,5 @@ export const withinLevel = (levelNumber: number, until: number) => until === 0 |
 export function moneyFinal(t: Tournament, levelNumber: number): boolean {
   const m = t.money;
   const open = (until: number) => (until ? levelNumber <= until : t.status === 'setup');
-  return !open(m.lateRegUntilLevel) && !(m.rebuyPrice > 0 && open(m.rebuyUntilLevel));
+  return !open(m.lateRegUntilLevel) && !(m.allowRebuys && open(m.rebuyUntilLevel));
 }

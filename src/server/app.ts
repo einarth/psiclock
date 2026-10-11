@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import type { Storage } from './storage/storage.js';
 import { Hub } from './hub.js';
 import { registerFloorRoutes } from './floor.js';
-import { registerDeskRoutes, validMoney } from './desk.js';
+import { registerDeskRoutes, validLevels, validMoney } from './desk.js';
 import { createActionRunner } from './actions.js';
 import { actorOf, registerAuth } from './auth.js';
 import { MOVE_TYPES, layoutFor, movesFrom, registerScreenRoutes } from './screens.js';
@@ -24,21 +24,6 @@ export interface AppOptions {
 }
 
 const clockCommands = new Set(['clock.start', 'clock.pause', 'clock.adjust', 'clock.setLevel']);
-
-function validLevels(levels: unknown): levels is Level[] {
-  return (
-    Array.isArray(levels) &&
-    levels.length > 0 &&
-    levels.every(
-      (l) =>
-        l &&
-        typeof l.minutes === 'number' &&
-        l.minutes > 0 &&
-        (l.kind === 'break' ||
-          (l.kind === 'level' && [l.smallBlind, l.bigBlind, l.ante].every((n) => typeof n === 'number' && n >= 0))),
-    )
-  );
-}
 
 export async function buildApp({ storage, webRoot, logger = false, rand }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger });

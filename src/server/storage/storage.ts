@@ -2,6 +2,7 @@ import type {
   ActionLogEntry,
   BlindStructure,
   ClockState,
+  Level,
   Entry,
   EntryPatch,
   Id,
@@ -66,6 +67,8 @@ export interface Storage {
   createTournament(t: NewTournament, clock: ClockState): Promise<Tournament>;
   updateTournamentClock(id: Id, clock: ClockState, status: TournamentStatus): Promise<void>;
   updateTournament(id: Id, patch: TournamentPatch): Promise<void>;
+  /** Replaces the blind structure and moves the clock to match, in one write. */
+  updateTournamentLevels(id: Id, levels: Level[], clock: ClockState): Promise<void>;
 
   /** Entries with the player's name filled in. */
   listEntries(tournamentId: Id): Promise<Entry[]>;

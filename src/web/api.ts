@@ -2,6 +2,7 @@ import type {
   BlindStructure,
   ClockCommand,
   Entry,
+  Level,
   MoneyConfig,
   NewPlayer,
   Player,
@@ -102,6 +103,8 @@ export const api = {
     money?: Partial<MoneyConfig>;
   }) => call<Tournament>('POST', '/api/tournaments', t),
   updateTournament: (id: number, patch: TournamentPatch) => call<unknown>('PATCH', `/api/tournaments/${id}`, patch),
+  saveLevels: (id: number, levels: Level[], currentIndex: number, expectedIndex: number) =>
+    call<unknown>('PUT', `/api/tournaments/${id}/levels`, { levels, currentIndex, expectedIndex }),
   clock: (id: number, cmd: ClockCommand) => call<Tournament>('POST', `/api/tournaments/${id}/clock`, cmd),
   register: (id: number, playerId: number, force = false) =>
     call<Entry>('POST', `/api/tournaments/${id}/entries`, { playerId, force }),

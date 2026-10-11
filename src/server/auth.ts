@@ -92,6 +92,7 @@ const access: Record<string, Role | 'public' | 'signedIn'> = {
   'POST /api/tournaments': 'director',
   'PATCH /api/tournaments/:id': 'director',
   'POST /api/tournaments/:id/clock': 'director',
+  'PUT /api/tournaments/:id/levels': 'director',
   'POST /api/tournaments/:id/screen': 'director',
   'GET /api/tournaments/:id/actions': 'director',
   'GET /api/templates': 'director',

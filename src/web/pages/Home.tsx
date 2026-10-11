@@ -87,7 +87,7 @@ export function Home() {
                 <strong>{t.name}</strong> <span className={`badge badge-${t.status}`}>{t.status}</span>
               </span>
               <span className="actions">
-                {hasRole(user, 'director') && <a href={`/director/${t.id}`}>Clock</a>}
+                {hasRole(user, 'director') && <a href={`/director/${t.id}`}>Manage</a>}
                 {hasRole(user, 'desk') && <a href={`/desk/${t.id}`}>Desk</a>}
                 {hasRole(user, 'floor') && <a href={`/floor/${t.id}`}>Floor</a>}
                 <a href={`/display/${t.id}`} target="_blank" rel="noreferrer">

@@ -15,18 +15,24 @@ const basics: Field[] = [
   { key: 'rounding', label: 'Round prizes down to' },
 ];
 const rebuys: Field[] = [
-  { key: 'rebuyPrice', label: 'Rebuy price', hint: '0 = no rebuys' },
-  { key: 'rebuyFee', label: 'Rebuy fee' },
+  { key: 'rebuyPrice', label: 'Rebuy price (prize pool)' },
+  { key: 'rebuyFee', label: 'Rebuy fee (kept)' },
   { key: 'rebuyChips', label: 'Rebuy chips' },
   { key: 'rebuyUntilLevel', label: 'Rebuys until level', hint: '0 = no limit' },
-  { key: 'addOnPrice', label: 'Add-on price', hint: '0 = no add-on' },
-  { key: 'addOnFee', label: 'Add-on fee' },
+];
+const addOn: Field[] = [
+  { key: 'addOnPrice', label: 'Add-on price (prize pool)' },
+  { key: 'addOnFee', label: 'Add-on fee (kept)' },
   { key: 'addOnChips', label: 'Add-on chips' },
 ];
+const switches = ['allowRebuys', 'allowAddOn'] as const;
 
+/** Every setting as text for the inputs; the two switches as 'yes' or ''. */
 function toForm(t: Tournament): Record<string, string> {
-  const values: Record<string, number> = { buyIn: t.buyIn, fee: t.fee, startingStack: t.startingStack, ...t.money };
-  return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, String(v)]));
+  const values: Record<string, number | boolean> = { buyIn: t.buyIn, fee: t.fee, startingStack: t.startingStack, ...t.money };
+  return Object.fromEntries(
+    Object.entries(values).map(([k, v]) => [k, typeof v === 'boolean' ? (v ? 'yes' : '') : String(v)]),
+  );
 }
 
 /** Buy-in, rebuy, add-on and late registration settings for the director. */
@@ -47,11 +53,14 @@ export function MoneySettings({ t }: { t: Tournament }) {
     setError('');
     setMessage('');
     const n = (k: string) => Number(form[k]);
-    if (Object.values(form).some((v) => !/^\d+$/.test(v.trim()))) {
+    const isSwitch = (k: string) => (switches as readonly string[]).includes(k);
+    if (Object.entries(form).some(([k, v]) => !isSwitch(k) && !/^\d+$/.test(v.trim()))) {
       setError('Every field must be a whole number, 0 or more.');
       return;
     }
-    const money = Object.fromEntries(Object.keys(t.money).map((k) => [k, n(k)])) as unknown as MoneyConfig;
+    const money = Object.fromEntries(
+      Object.keys(t.money).map((k) => [k, isSwitch(k) ? form[k] === 'yes' : n(k)]),
+    ) as unknown as MoneyConfig;
     try {
       await api.updateTournament(t.id, { buyIn: n('buyIn'), fee: n('fee'), startingStack: n('startingStack'), money });
       setMessage('Saved.');
@@ -59,6 +68,8 @@ export function MoneySettings({ t }: { t: Tournament }) {
       setError((err as Error).message);
     }
   };
+
+  const toggle = (k: (typeof switches)[number], on: boolean) => setForm({ ...form, [k]: on ? 'yes' : '' });
 
   const input = (f: Field) => (
     <label key={f.key}>
@@ -74,7 +85,17 @@ export function MoneySettings({ t }: { t: Tournament }) {
       <form onSubmit={save}>
         <div className="grid-form">{basics.map(input)}</div>
         <h3 className="subhead">Rebuys and add-on</h3>
-        <div className="grid-form">{rebuys.map(input)}</div>
+        <label className="check">
+          <input type="checkbox" checked={form.allowRebuys === 'yes'} onChange={(e) => toggle('allowRebuys', e.target.checked)} />
+          Allow rebuys
+        </label>
+        {form.allowRebuys === 'yes' && <div className="grid-form">{rebuys.map(input)}</div>}
+        <label className="check">
+          <input type="checkbox" checked={form.allowAddOn === 'yes'} onChange={(e) => toggle('allowAddOn', e.target.checked)} />
+          Allow an add-on
+        </label>
+        {form.allowAddOn === 'yes' && <div className="grid-form">{addOn.map(input)}</div>}
+        {form.allowRebuys !== 'yes' && form.allowAddOn !== 'yes' && <p className="muted small">Freezeout: no rebuys or add-on.</p>}
         <div className="form-actions">
           <button type="submit" disabled={!dirty}>
             Save settings

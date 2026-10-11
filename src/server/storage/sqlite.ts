@@ -5,6 +5,7 @@ import type {
   ActionLogEntry,
   BlindStructure,
   ClockState,
+  Level,
   Entry,
   EntryPatch,
   Id,
@@ -19,7 +20,7 @@ import type {
   TournamentTemplate,
 } from '../../shared/types.js';
 import { defaultScreen } from '../../shared/types.js';
-import { defaultMoney } from '../../shared/money.js';
+import { normalizeMoney } from '../../shared/money.js';
 import type { Role, User } from '../../shared/auth.js';
 import type { LayoutConfig, ScreenLayout } from '../../shared/layout.js';
 import type { Asset, NewUser, Storage, UserPatch } from './storage.js';
@@ -187,7 +188,7 @@ const toTournament = (r: Row): Tournament => ({
   theme: String(r.theme),
   tables: JSON.parse(String(r.tables)),
   handForHand: Boolean(r.hand_for_hand),
-  money: { ...defaultMoney, ...JSON.parse(String(r.money)) },
+  money: normalizeMoney(JSON.parse(String(r.money))),
   payouts: r.payouts == null ? null : JSON.parse(String(r.payouts)),
   layoutId: r.layout_id == null ? null : Number(r.layout_id),
   screen: { ...defaultScreen, ...JSON.parse(String(r.screen)) },
@@ -212,7 +213,7 @@ const toLayout = (r: Row): ScreenLayout => ({
 
 const toTemplate = (r: Row): TournamentTemplate => {
   const c = JSON.parse(String(r.config)) as TemplateConfig;
-  return { ...c, money: { ...defaultMoney, ...c.money }, id: Number(r.id), name: String(r.name), updatedAt: String(r.updated_at) };
+  return { ...c, money: normalizeMoney(c.money), id: Number(r.id), name: String(r.name), updatedAt: String(r.updated_at) };
 };
 
 const toAsset = (r: Row): Asset => ({
@@ -367,7 +368,7 @@ export class SqliteStorage implements Storage {
         JSON.stringify(clock),
         t.theme ?? 'classic',
         JSON.stringify(t.tables ?? []),
-        JSON.stringify({ ...defaultMoney, ...t.money }),
+        JSON.stringify(normalizeMoney(t.money)),
         t.payouts ? JSON.stringify(t.payouts) : null,
         t.layoutId ?? null,
       ) as Row;
@@ -376,6 +377,10 @@ export class SqliteStorage implements Storage {
 
   async updateTournamentClock(id: Id, clock: ClockState, status: TournamentStatus) {
     this.db.prepare('UPDATE tournaments SET clock = ?, status = ? WHERE id = ?').run(JSON.stringify(clock), status, id);
+  }
+
+  async updateTournamentLevels(id: Id, levels: Level[], clock: ClockState) {
+    this.db.prepare('UPDATE tournaments SET levels = ?, clock = ? WHERE id = ?').run(JSON.stringify(levels), JSON.stringify(clock), id);
   }
 
   async updateTournament(id: Id, patch: TournamentPatch) {

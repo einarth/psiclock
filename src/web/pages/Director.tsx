@@ -7,6 +7,7 @@ import { blindsText } from '../format';
 import { MoneySettings, PayoutEditor } from './MoneySettings';
 import { ScreenControl } from './ScreenControl';
 import { SaveTemplate } from './SaveTemplate';
+import { StructureEditor } from './StructureEditor';
 
 export function Director({ id }: { id: number }) {
   const { tournament: t, entries, moves, setTournament, offset, connected } = useLiveTournament(id);
@@ -69,38 +70,7 @@ export function Director({ id }: { id: number }) {
       <PayoutEditor t={t} entries={entries} />
       <MoneySettings t={t} />
 
-      <section className="card">
-        <h2>Structure</h2>
-        <table className="levels">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Blinds</th>
-              <th>Minutes</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {t.levels.map((l, i) => (
-              <tr key={i} className={i === view.levelIndex ? 'current' : i < view.levelIndex ? 'past' : ''}>
-                <td>{l.kind === 'level' ? t.levels.slice(0, i + 1).filter((x) => x.kind === 'level').length : ''}</td>
-                <td>
-                  {blindsText(l)}
-                  {l.kind === 'break' && l.note ? `, ${l.note}` : ''}
-                </td>
-                <td>{l.minutes}</td>
-                <td>
-                  {i !== view.levelIndex && (
-                    <button className="link" onClick={() => send({ type: 'clock.setLevel', levelIndex: i })}>
-                      Jump here
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+      <StructureEditor t={t} view={view} onJump={(levelIndex) => send({ type: 'clock.setLevel', levelIndex })} />
 
       <SaveTemplate t={t} />
     </main>
