@@ -2,8 +2,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import type { BlindStructure, Tournament } from '../../shared/types';
 import { num } from '../format';
+import { SessionFooter, signInUrl, useSession } from '../session';
+import { hasRole } from '../../shared/auth';
 
+/** Start page: the tournament list for everyone, with staff links and the create form for signed-in staff. */
 export function Home() {
+  const me = useSession();
+  const user = me?.user ?? null;
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [structures, setStructures] = useState<BlindStructure[]>([]);
   const [error, setError] = useState('');
@@ -31,17 +36,21 @@ export function Home() {
   };
 
   return (
+    <>
     <main className="page">
       <header className="page-head">
         <h1>PSICLOCK</h1>
         <nav>
-          <a href="/players">Players</a>
+          {hasRole(user, 'desk') && <a href="/players">Players</a>}
+          {hasRole(user, 'director') && <a href="/layouts">Screen layouts</a>}
+          {hasRole(user, 'admin') && <a href="/users">Logins</a>}
+          {me && !user && <a href={me.setupNeeded ? '/login' : signInUrl()}>{me.setupNeeded ? 'Set up logins' : 'Sign in'}</a>}
         </nav>
       </header>
 
       <section className="card">
         <h2>Tournaments</h2>
-        {tournaments.length === 0 && <p className="muted">No tournaments yet. Create one below.</p>}
+        {tournaments.length === 0 && <p className="muted">No tournaments yet.</p>}
         <ul className="list">
           {tournaments.map((t) => (
             <li key={t.id}>
@@ -49,9 +58,9 @@ export function Home() {
                 <strong>{t.name}</strong> <span className={`badge badge-${t.status}`}>{t.status}</span>
               </span>
               <span className="actions">
-                <a href={`/director/${t.id}`}>Clock</a>
-                <a href={`/desk/${t.id}`}>Desk</a>
-                <a href={`/floor/${t.id}`}>Floor</a>
+                {hasRole(user, 'director') && <a href={`/director/${t.id}`}>Clock</a>}
+                {hasRole(user, 'desk') && <a href={`/desk/${t.id}`}>Desk</a>}
+                {hasRole(user, 'floor') && <a href={`/floor/${t.id}`}>Floor</a>}
                 <a href={`/display/${t.id}`} target="_blank" rel="noreferrer">
                   Big screen
                 </a>
@@ -64,6 +73,7 @@ export function Home() {
         </ul>
       </section>
 
+      {hasRole(user, 'director') && (
       <section className="card">
         <h2>New tournament</h2>
         <form className="grid-form" onSubmit={create}>
@@ -118,18 +128,14 @@ export function Home() {
               ))}
             </select>
           </label>
-          <label>
-            Big-screen theme
-            <select value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value })}>
-              <option value="classic">Classic green</option>
-              <option value="midnight">Midnight</option>
-            </select>
-          </label>
           <button type="submit">Create tournament</button>
           {error && <p className="error">{error}</p>}
         </form>
         <p className="muted small">Starting stack {num(form.startingStack)}. Structures can be edited in a later step.</p>
       </section>
+      )}
     </main>
+    <SessionFooter />
+    </>
   );
 }

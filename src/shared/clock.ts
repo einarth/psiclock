@@ -75,3 +75,24 @@ export function formatClock(ms: number): string {
   const mm = String(m).padStart(h ? 2 : 1, '0');
   return `${h ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
 }
+
+/** Milliseconds until the given play level ends (breaks after it not counted); null once it is over. */
+export function msUntilEndOfLevel(levels: Level[], view: ClockView, levelNumber: number): number | null {
+  let n = 0;
+  const index = levels.findIndex((l) => l.kind === 'level' && ++n === levelNumber);
+  if (index < 0 || index < view.levelIndex || view.finished) return null;
+  let ms = view.remainingMs;
+  for (let i = view.levelIndex + 1; i <= index; i++) ms += minutesToMs(levels[i].minutes);
+  return ms;
+}
+
+/** Milliseconds until the next break starts; null during a break or when no break is left. */
+export function msUntilNextBreak(levels: Level[], view: ClockView): number | null {
+  if (view.finished || view.level?.kind === 'break') return null;
+  let ms = view.remainingMs;
+  for (let i = view.levelIndex + 1; i < levels.length; i++) {
+    if (levels[i].kind === 'break') return ms;
+    ms += minutesToMs(levels[i].minutes);
+  }
+  return null;
+}

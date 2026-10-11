@@ -7,8 +7,10 @@ import { Hub } from './hub.js';
 import { registerFloorRoutes } from './floor.js';
 import { registerDeskRoutes, validMoney } from './desk.js';
 import { createActionRunner } from './actions.js';
+import { actorOf, registerAuth } from './auth.js';
+import { MOVE_TYPES, layoutFor, movesFrom, registerScreenRoutes } from './screens.js';
 import { applyClockCommand, clockAt, initialClock } from '../shared/clock.js';
-import type { ClockCommand, Id, Level, MoneyConfig, NewPlayer, TableConfig } from '../shared/types.js';
+import type { ClockCommand, Id, Level, MoneyConfig, NewPlayer, ServerMessage, TableConfig } from '../shared/types.js';
 import type { Rand } from '../shared/seating.js';
 
 export interface AppOptions {
@@ -41,14 +43,34 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
   const app = Fastify({ logger });
   const hub = new Hub();
   await app.register(websocket);
+  registerAuth(app, storage);
 
-  const publish = async (id: Id) => {
+  /** Everything a screen needs about one tournament, as pushed over the WebSocket. */
+  const snapshot = async (id: Id): Promise<ServerMessage | null> => {
     const t = await storage.getTournament(id);
-    if (t) hub.publish(t, await storage.listEntries(id));
+    if (!t) return null;
+    const entries = await storage.listEntries(id);
+    const actions = await storage.listActions(id, { types: MOVE_TYPES, limit: 60 });
+    return {
+      type: 'tournament',
+      tournament: t,
+      entries,
+      layout: await layoutFor(storage, t.layoutId),
+      moves: movesFrom(actions, entries),
+      serverTime: Date.now(),
+    };
+  };
+  const publish = async (id: Id) => {
+    const msg = await snapshot(id);
+    if (msg) hub.publish(id, msg);
+  };
+  const publishAll = async () => {
+    for (const id of hub.watched()) await publish(id);
   };
   const run = createActionRunner(storage, publish);
   registerFloorRoutes(app, storage, run, rand);
   registerDeskRoutes(app, storage, run, rand);
+  registerScreenRoutes(app, storage, run, publishAll);
 
   app.get('/api/time', async () => ({ serverTime: Date.now() }));
 
@@ -58,7 +80,7 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
   app.post<{ Body: NewPlayer }>('/api/players', async (req, reply) => {
     if (!req.body?.name?.trim()) return reply.code(400).send({ error: 'name is required' });
     const player = await storage.createPlayer(req.body);
-    await storage.appendAction({ tournamentId: null, type: 'player.create', payload: player, actor: 'desk' });
+    await storage.appendAction({ tournamentId: null, type: 'player.create', payload: player, actor: actorOf(req, 'desk') });
     return reply.code(201).send(player);
   });
 
@@ -68,7 +90,7 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
     }
     const player = await storage.updatePlayer(Number(req.params.id), req.body ?? {});
     if (!player) return reply.code(404).send({ error: 'player not found' });
-    await storage.appendAction({ tournamentId: null, type: 'player.update', payload: player, actor: 'desk' });
+    await storage.appendAction({ tournamentId: null, type: 'player.update', payload: player, actor: actorOf(req, 'desk') });
     return player;
   });
 
@@ -132,7 +154,7 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
       },
       initialClock(Date.now()),
     );
-    await storage.appendAction({ tournamentId: t.id, type: 'tournament.create', payload: t, actor: 'director' });
+    await storage.appendAction({ tournamentId: t.id, type: 'tournament.create', payload: t, actor: actorOf(req, 'director') });
     return reply.code(201).send(t);
   });
 
@@ -147,7 +169,7 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
     const finished = clockAt(t.levels, clock, now).finished;
     const status = t.status === 'setup' && cmd.type === 'clock.start' ? 'running' : finished ? 'finished' : t.status;
     await storage.updateTournamentClock(id, clock, status);
-    await storage.appendAction({ tournamentId: id, type: cmd.type, payload: cmd, actor: 'director' });
+    await storage.appendAction({ tournamentId: id, type: cmd.type, payload: cmd, actor: actorOf(req, 'director') });
     await publish(id);
     return { ...t, clock, status };
   });
@@ -166,11 +188,8 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
     const id = Number(req.query.tournament);
     if (!id) return;
     hub.watch(id, socket);
-    const t = await storage.getTournament(id);
-    if (t) {
-      const entries = await storage.listEntries(id);
-      hub.send(socket, { type: 'tournament', tournament: t, entries, serverTime: Date.now() });
-    }
+    const msg = await snapshot(id);
+    if (msg) hub.send(socket, msg);
   });
 
   if (webRoot && existsSync(webRoot)) {

@@ -86,3 +86,14 @@ export function payoutsFor(t: Tournament, entries: Entry[]): number[] {
 
 /** True while the given level number is within a limit, where 0 means no limit. */
 export const withinLevel = (levelNumber: number, until: number) => until === 0 || levelNumber <= until;
+
+/**
+ * True once late registration and rebuys have both closed, so the prize pool
+ * and payout table stop changing. A limit left at 0 counts as closed once the
+ * clock has started, so screens still show payouts when no limit was set.
+ */
+export function moneyFinal(t: Tournament, levelNumber: number): boolean {
+  const m = t.money;
+  const open = (until: number) => (until ? levelNumber <= until : t.status === 'setup');
+  return !open(m.lateRegUntilLevel) && !(m.rebuyPrice > 0 && open(m.rebuyUntilLevel));
+}

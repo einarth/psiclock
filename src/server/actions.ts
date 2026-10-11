@@ -47,7 +47,7 @@ export function createActionRunner(storage: Storage, publish: (id: Id) => Promis
           return e;
         };
         const { result, payload } = await fn({ t, entries, entry });
-        await storage.appendAction({ tournamentId, type, payload, actor });
+        await storage.appendAction({ tournamentId, type, payload, actor: reply.request.user?.username ?? actor });
         return result;
       }),
     );

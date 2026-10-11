@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyClockCommand, clockAt, formatClock, initialClock } from './clock';
+import { applyClockCommand, clockAt, formatClock, initialClock, msUntilEndOfLevel, msUntilNextBreak } from './clock';
 import type { Level } from './types';
 
 const levels: Level[] = [
@@ -68,5 +68,17 @@ describe('clock', () => {
     expect(formatClock(9 * MIN + 5_000)).toBe('9:05');
     expect(formatClock(65 * MIN)).toBe('1:05:00');
     expect(formatClock(-5)).toBe('0:00');
+  });
+
+  it('counts down to the end of a level and to the next break', () => {
+    const running = applyClockCommand(levels, initialClock(t0), { type: 'clock.start' }, t0);
+    const view = clockAt(levels, running, t0 + 3 * MIN);
+    expect(msUntilEndOfLevel(levels, view, 1)).toBe(7 * MIN);
+    expect(msUntilEndOfLevel(levels, view, 3)).toBe(32 * MIN);
+    expect(msUntilEndOfLevel(levels, view, 9)).toBeNull();
+    expect(msUntilNextBreak(levels, view)).toBe(17 * MIN);
+    const later = clockAt(levels, running, t0 + 22 * MIN);
+    expect(msUntilEndOfLevel(levels, later, 1)).toBeNull();
+    expect(msUntilNextBreak(levels, later)).toBeNull();
   });
 });

@@ -1,3 +1,5 @@
+import type { LayoutConfig } from './layout.js';
+
 export type Id = number;
 
 export interface Player {
@@ -111,7 +113,33 @@ export interface Tournament {
   money: MoneyConfig;
   /** Percent of the prize pool per place, set by hand; null = use the suggested table. */
   payouts: number[] | null;
+  /** Saved big-screen layout; null = the built-in one. */
+  layoutId: Id | null;
+  screen: ScreenState;
   createdAt: string;
+}
+
+/** What the big screens show. Anything but the clock can return to the clock by itself at `until`. */
+export type Scene = 'clock' | 'seating' | 'moves' | 'payouts' | 'message';
+
+export interface ScreenState {
+  scene: Scene;
+  message?: string;
+  /** Epoch ms when the screens go back to the clock; null = stay. */
+  until?: number | null;
+  /** Show player moves for a minute whenever a table is broken. */
+  autoMoves: boolean;
+}
+
+export const defaultScreen: ScreenState = { scene: 'clock', until: null, autoMoves: true };
+
+/** A player moved by the floor, for the moves screen. */
+export interface Move {
+  at: string;
+  playerName: string;
+  from: { table: number | null; seat: number | null } | null;
+  to: { table: number; seat: number };
+  reason: 'balance' | 'break' | 'redraw';
 }
 
 export type NewTournament = Pick<Tournament, 'name' | 'buyIn' | 'fee' | 'startingStack' | 'levels'> &
@@ -119,7 +147,10 @@ export type NewTournament = Pick<Tournament, 'name' | 'buyIn' | 'fee' | 'startin
 
 /** Fields the director can change after the tournament is created. */
 export type TournamentPatch = Partial<
-  Pick<Tournament, 'name' | 'buyIn' | 'fee' | 'startingStack' | 'theme' | 'tables' | 'handForHand' | 'money' | 'payouts'>
+  Pick<
+    Tournament,
+    'name' | 'buyIn' | 'fee' | 'startingStack' | 'theme' | 'tables' | 'handForHand' | 'money' | 'payouts' | 'layoutId' | 'screen'
+  >
 >;
 
 export type EntryPatch = Partial<Pick<Entry, 'table' | 'seat' | 'bustSeq' | 'rebuys' | 'addOn' | 'paidOut'>>;
@@ -143,4 +174,13 @@ export type ClockCommand =
 /** Messages the server pushes over the WebSocket. */
 export type ServerMessage =
   | { type: 'hello'; serverTime: number }
-  | { type: 'tournament'; tournament: Tournament; entries: Entry[]; serverTime: number };
+  | {
+      type: 'tournament';
+      tournament: Tournament;
+      entries: Entry[];
+      /** The layout in force for this tournament's big screens. */
+      layout: LayoutConfig;
+      /** Recent player moves, newest first. */
+      moves: Move[];
+      serverTime: number;
+    };

@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws';
-import type { Entry, Id, ServerMessage, Tournament } from '../shared/types.js';
+import type { Id, ServerMessage } from '../shared/types.js';
 
 /** Keeps track of which sockets watch which tournament and pushes updates to them. */
 export class Hub {
@@ -16,9 +16,12 @@ export class Hub {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg));
   }
 
-  publish(tournament: Tournament, entries: Entry[]) {
-    for (const s of this.watchers.get(tournament.id) ?? []) {
-      this.send(s, { type: 'tournament', tournament, entries, serverTime: Date.now() });
-    }
+  publish(tournamentId: Id, msg: ServerMessage) {
+    for (const s of this.watchers.get(tournamentId) ?? []) this.send(s, msg);
+  }
+
+  /** Tournaments that at least one screen is watching. */
+  watched(): Id[] {
+    return [...this.watchers].filter(([, set]) => set.size > 0).map(([id]) => id);
   }
 }

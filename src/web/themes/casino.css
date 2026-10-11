@@ -1,0 +1,9 @@
+/* Deep red felt with gold. */
+[data-theme='casino'] {
+  --d-bg: radial-gradient(ellipse at center, #7a1622 0%, #2e060b 85%);
+  --d-text: #fff8ec;
+  --d-muted: #e3b9a8;
+  --d-accent: #ffd36b;
+  --d-warning: #ff9b5c;
+  --d-font: Georgia, 'Times New Roman', serif;
+}

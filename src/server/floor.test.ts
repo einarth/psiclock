@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app';
 import { SqliteStorage } from './storage/sqlite';
+import { signedIn } from './testing';
 import { defaultStructures } from '../shared/structures';
 import type { Entry } from '../shared/types';
 
@@ -9,9 +10,10 @@ describe('floor actions', () => {
   let app: FastifyInstance;
   let storage: SqliteStorage;
   let tid: number;
+  let cookie: string;
 
   const post = async (url: string, payload?: object) => {
-    const res = await app.inject({ method: 'POST', url, payload: payload ?? {} });
+    const res = await app.inject({ method: 'POST', url, payload: payload ?? {}, headers: { cookie } });
     return { status: res.statusCode, body: res.json() };
   };
   const entries = async () => (await app.inject({ url: `/api/tournaments/${tid}/entries` })).json() as Entry[];
@@ -21,6 +23,7 @@ describe('floor actions', () => {
     await storage.init();
     const s = await storage.createStructure(defaultStructures[0]);
     app = await buildApp({ storage });
+    cookie = await signedIn(storage);
     const t = await post('/api/tournaments', { name: 'Test', structureId: s.id, tableCount: 2, seatsPerTable: 3, startingStack: 1000 });
     tid = t.body.id;
     for (const name of ['A', 'B', 'C', 'D', 'E']) {
@@ -54,7 +57,7 @@ describe('floor actions', () => {
     expect((await post(`/api/tournaments/${tid}/entries/${a.id}/bust`)).status).toBe(400);
     const back = await post(`/api/tournaments/${tid}/entries/${a.id}/restore`);
     expect(back.body).toEqual({ table: a.table, seat: a.seat });
-    const actions = (await app.inject({ url: `/api/tournaments/${tid}/actions` })).json();
+    const actions = (await app.inject({ url: `/api/tournaments/${tid}/actions`, headers: { cookie } })).json();
     expect(actions.map((x: { type: string }) => x.type)).toContain('entry.restore');
   });
 

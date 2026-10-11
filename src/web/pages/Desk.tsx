@@ -5,6 +5,8 @@ import { finishingPlace, isAlive } from '../../shared/seating';
 import { moneySummary, payoutsFor, withinLevel } from '../../shared/money';
 import type { Entry, Player } from '../../shared/types';
 import { num, ordinal } from '../format';
+import { useSession } from '../session';
+import { hasRole } from '../../shared/auth';
 
 type Blocked = { text: string; retry: () => Promise<unknown> };
 
@@ -12,6 +14,7 @@ type Blocked = { text: string; retry: () => Promise<unknown> };
 export function Desk({ id }: { id: number }) {
   const { tournament: t, entries, offset, connected } = useLiveTournament(id);
   const view = useClockView(t, offset);
+  const me = useSession();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('');
   const [players, setPlayers] = useState<Player[]>([]);
@@ -106,7 +109,7 @@ export function Desk({ id }: { id: number }) {
         <h1>{t.name}: desk</h1>
         <nav>
           <a href="/">All tournaments</a>
-          <a href={`/director/${id}`}>Director</a>
+          {hasRole(me?.user, 'director') && <a href={`/director/${id}`}>Director</a>}
           <a href={`/floor/${id}`}>Floor</a>
           <a href={`/api/tournaments/${id}/results.csv`}>Results (CSV)</a>
         </nav>

@@ -7,7 +7,23 @@ import type {
   Player,
   Tournament,
   TournamentPatch,
+  ScreenState,
 } from '../shared/types';
+import type { Role, User } from '../shared/auth';
+import type { LayoutConfig, ScreenLayout } from '../shared/layout';
+
+export interface Me {
+  user: User | null;
+  setupNeeded: boolean;
+  setupAllowed: boolean;
+}
+
+export interface Asset {
+  id: number;
+  name: string;
+  mime: string;
+  size: number;
+}
 
 type Seat = { table: number; seat: number };
 
@@ -28,11 +44,44 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
+  // Signed out (or the session ran out): go to the sign-in page and come back here afterwards.
+  if (res.status === 401 && !url.startsWith('/api/auth/')) {
+    location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
+  }
   if (!res.ok) throw new ApiError(data.error ?? `Request failed (${res.status})`, res.status);
   return data as T;
 }
 
 export const api = {
+  me: () => call<Me>('GET', '/api/auth/me'),
+  setup: (u: { username: string; displayName: string; password: string }) =>
+    call<{ user: User }>('POST', '/api/auth/setup', u),
+  login: (username: string, password: string) => call<{ user: User }>('POST', '/api/auth/login', { username, password }),
+  logout: () => call<unknown>('POST', '/api/auth/logout', {}),
+  changePassword: (current: string, password: string) => call<unknown>('POST', '/api/auth/password', { current, password }),
+  users: () => call<User[]>('GET', '/api/users'),
+  createUser: (u: { username: string; displayName: string; role: Role; password: string }) =>
+    call<User>('POST', '/api/users', u),
+  updateUser: (id: number, patch: { displayName?: string; role?: Role; active?: boolean; password?: string }) =>
+    call<User>('PATCH', `/api/users/${id}`, patch),
+  layouts: () => call<ScreenLayout[]>('GET', '/api/layouts'),
+  createLayout: (name: string, layout: LayoutConfig) => call<ScreenLayout>('POST', '/api/layouts', { name, layout }),
+  saveLayout: (id: number, name: string, layout: LayoutConfig) =>
+    call<ScreenLayout>('PUT', `/api/layouts/${id}`, { name, layout }),
+  deleteLayout: (id: number) => call<unknown>('DELETE', `/api/layouts/${id}`, {}),
+  assets: () => call<Asset[]>('GET', '/api/assets'),
+  uploadAsset: async (file: File) => {
+    const res = await fetch(`/api/assets?name=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(data.error ?? `Upload failed (${res.status})`, res.status);
+    return data as Asset;
+  },
+  setScreen: (id: number, s: { scene?: ScreenState['scene']; seconds?: number; message?: string; autoMoves?: boolean }) =>
+    call<ScreenState>('POST', `/api/tournaments/${id}/screen`, s),
   players: (search = '') => call<Player[]>('GET', `/api/players?search=${encodeURIComponent(search)}`),
   createPlayer: (p: NewPlayer) => call<Player>('POST', '/api/players', p),
   updatePlayer: (id: number, p: Partial<NewPlayer>) => call<Player>('PATCH', `/api/players/${id}`, p),

@@ -7,9 +7,10 @@ import {
   payoutsFor,
   suggestedPercents,
   suggestedPlacesPaid,
+  moneyFinal,
   withinLevel,
 } from './money';
-import type { Entry, Tournament } from './types';
+import { defaultScreen, type Entry, type Tournament } from './types';
 
 const tournament = (over: Partial<Tournament> = {}): Tournament => ({
   id: 1,
@@ -25,6 +26,8 @@ const tournament = (over: Partial<Tournament> = {}): Tournament => ({
   handForHand: false,
   money: { ...defaultMoney, rebuyPrice: 10000, rebuyFee: 1000, rebuyChips: 20000, addOnPrice: 10000, addOnChips: 25000 },
   payouts: null,
+  layoutId: null,
+  screen: defaultScreen,
   createdAt: '',
   ...over,
 });
@@ -89,5 +92,13 @@ describe('money', () => {
     expect(withinLevel(12, 0)).toBe(true);
     expect(withinLevel(6, 6)).toBe(true);
     expect(withinLevel(7, 6)).toBe(false);
+  });
+
+  it('knows when the money is final', () => {
+    const t = tournament({ money: { ...defaultMoney, lateRegUntilLevel: 6, rebuyPrice: 1000, rebuyUntilLevel: 4 } });
+    expect(moneyFinal(t, 5)).toBe(false);
+    expect(moneyFinal(t, 7)).toBe(true);
+    expect(moneyFinal(tournament({ money: defaultMoney, status: 'setup' }), 1)).toBe(false);
+    expect(moneyFinal(tournament({ money: defaultMoney }), 1)).toBe(true);
   });
 });

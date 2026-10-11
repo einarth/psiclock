@@ -5,6 +5,7 @@ import { formatClock } from '../../shared/clock';
 import type { ClockCommand } from '../../shared/types';
 import { blindsText } from '../format';
 import { MoneySettings, PayoutEditor } from './MoneySettings';
+import { ScreenControl } from './ScreenControl';
 
 export function Director({ id }: { id: number }) {
   const { tournament: t, entries, setTournament, offset, connected } = useLiveTournament(id);
@@ -63,6 +64,7 @@ export function Director({ id }: { id: number }) {
         {error && <p className="error">{error}</p>}
       </section>
 
+      <ScreenControl t={t} offset={offset} />
       <PayoutEditor t={t} entries={entries} />
       <MoneySettings t={t} />
 

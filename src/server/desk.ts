@@ -45,6 +45,10 @@ export function registerDeskRoutes(app: FastifyInstance, storage: Storage, run: 
         if (!validMoney(b.money)) throw new ActionError('money settings must all be whole numbers of 0 or more');
         patch.money = { ...t.money, ...b.money };
       }
+      if (b.layoutId !== undefined) {
+        if (b.layoutId !== null && !(await storage.getLayout(Number(b.layoutId)))) throw new ActionError('layout not found');
+        patch.layoutId = b.layoutId === null ? null : Number(b.layoutId);
+      }
       if (b.payouts !== undefined) {
         if (!validPayouts(b.payouts)) throw new ActionError('payout percentages must be positive and add up to 100');
         patch.payouts = b.payouts;

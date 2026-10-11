@@ -1,0 +1,9 @@
+/* Light background for bright rooms and projectors. */
+[data-theme='daylight'] {
+  --d-bg: linear-gradient(180deg, #ffffff 0%, #e9eef3 100%);
+  --d-text: #12202e;
+  --d-muted: #5b6b7b;
+  --d-accent: #0f6fc6;
+  --d-warning: #d2421b;
+  --d-font: 'Segoe UI', system-ui, sans-serif;
+}

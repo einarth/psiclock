@@ -22,6 +22,10 @@ The server prints the addresses to open, for example `http://192.168.1.20:3000`.
 Open that on the big screen and on phones or tablets. Data is kept in `data/psiclock.db`
 (change with `PSICLOCK_DB=path`; change the port with `PORT=8080`). Back up that one file.
 
+The first time it starts, open `http://localhost:3000/login` on the laptop itself and create
+the first login; it becomes the admin. Add logins for the desk and floor staff under Logins.
+Anyone on the network can open the big screens without a login; everything else needs one.
+
 On Windows the first start may ask to allow Node.js through the firewall; allow it on
 private networks so other devices can connect.
 
@@ -38,12 +42,16 @@ npm run typecheck
 
 | Path | Who | What |
 | --- | --- | --- |
-| `/` | Director | List and create tournaments |
+| `/` | Anyone | List tournaments; staff see their links, directors can create tournaments |
+| `/login` | Staff | Sign in; on a fresh install, create the first (admin) login from the laptop |
 | `/director/:id` | Director | Run the clock; buy-in, rebuy, add-on, late registration and guarantee settings; payout table (automatic about 15% paid, or edit the percentages by hand) |
 | `/desk/:id` | Desk | Register and seat players, take rebuys and add-ons (shows the amount to collect), prize pool summary, mark prizes paid, results as CSV |
 | `/floor/:id` | Floor staff | Phone or tablet view: bust players (with undo), move players, balance and break tables, redraw seats, hand-for-hand |
-| `/display/:id` | Big screen | Clock, blinds, next level; click once for full screen and sound. `?theme=midnight` overrides the theme |
-| `/payouts/:id` | Second screen | Prize pool and payout table, filling in each place as players finish |
+| `/display/:id` | Big screen (no login) | Whatever the director puts on the screens: the clock layout, seating, player moves, payouts or a message. Click once for full screen and sound. `?scene=payouts` pins a TV to one scene, `?theme=midnight` overrides the theme |
+| `/payouts/:id` | Second screen (no login) | The big screen pinned to the payout table |
+| `/layouts` | Director | Build and save big-screen layouts: theme, colours, font, background, and widgets (sponsor logo, payouts, bustouts, countdowns, messages) placed around the clock, with a live preview |
+| `/users` | Admin | Add staff logins, change roles, reset passwords, turn logins off |
+| `/account` | Staff | Change your own password |
 | `/players` | Desk | Player database: add with just a name, fill in details later |
 
 ## Layout
@@ -69,4 +77,9 @@ a top-heavy curve, and prizes are rounded down to the rounding unit with the rem
 first place. Level limits for late registration and rebuys can be overridden at the desk. The
 rules live in `src/shared/money.ts`.
 
-Every change is also written to `action_log`, which later steps use for the audit trail and undo.
+Roles build on each other: Floor (bust, move, balance, break tables) < Desk (plus registration,
+rebuys, add-ons, payouts, players) < Director (plus clock, settings, layouts, screens) < Admin
+(plus logins). The rules for every API route are in one table in `src/server/auth.ts`; a route
+missing from it is admin-only. Passwords are stored as scrypt hashes and sessions as hashed tokens.
+
+Every change is also written to `action_log`, with the username of whoever made it.

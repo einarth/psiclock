@@ -1,7 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Storage } from './storage.js';
 import type {
   ActionLogEntry,
   BlindStructure,
@@ -17,7 +16,11 @@ import type {
   TournamentPatch,
   TournamentStatus,
 } from '../../shared/types.js';
+import { defaultScreen } from '../../shared/types.js';
 import { defaultMoney } from '../../shared/money.js';
+import type { Role, User } from '../../shared/auth.js';
+import type { LayoutConfig, ScreenLayout } from '../../shared/layout.js';
+import type { Asset, NewUser, Storage, UserPatch } from './storage.js';
 
 type Row = Record<string, unknown>;
 
@@ -77,6 +80,35 @@ const migrations: string[] = [
    ALTER TABLE entries ADD COLUMN rebuys INTEGER NOT NULL DEFAULT 0;
    ALTER TABLE entries ADD COLUMN add_on INTEGER NOT NULL DEFAULT 0;
    ALTER TABLE entries ADD COLUMN paid_out INTEGER NOT NULL DEFAULT 0;`,
+  `CREATE TABLE users (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     display_name TEXT NOT NULL,
+     role TEXT NOT NULL,
+     password_hash TEXT NOT NULL,
+     active INTEGER NOT NULL DEFAULT 1,
+     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+   );
+   CREATE TABLE sessions (
+     token_hash TEXT PRIMARY KEY,
+     user_id INTEGER NOT NULL REFERENCES users(id),
+     expires_at INTEGER NOT NULL
+   );
+   CREATE TABLE layouts (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     name TEXT NOT NULL,
+     config TEXT NOT NULL,
+     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+   );
+   CREATE TABLE assets (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     name TEXT NOT NULL,
+     mime TEXT NOT NULL,
+     data BLOB NOT NULL,
+     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+   );
+   ALTER TABLE tournaments ADD COLUMN layout_id INTEGER REFERENCES layouts(id) ON DELETE SET NULL;
+   ALTER TABLE tournaments ADD COLUMN screen TEXT NOT NULL DEFAULT '{}';`,
 ];
 
 /** How each patchable field is stored: column name and conversion to a SQLite value. */
@@ -92,6 +124,8 @@ const tournamentColumns: Record<keyof TournamentPatch, Column> = {
   handForHand: ['hand_for_hand', (v: boolean) => (v ? 1 : 0)],
   money: ['money', json],
   payouts: ['payouts', json],
+  layoutId: ['layout_id', (v: number | null) => v],
+  screen: ['screen', json],
 };
 const entryColumns: Record<keyof EntryPatch, Column> = {
   table: ['table_no', (v: number | null) => v],
@@ -100,6 +134,13 @@ const entryColumns: Record<keyof EntryPatch, Column> = {
   rebuys: ['rebuys', (v: number) => v],
   addOn: ['add_on', (v: boolean) => (v ? 1 : 0)],
   paidOut: ['paid_out', (v: number) => v],
+};
+
+const userColumns: Record<keyof UserPatch, Column> = {
+  displayName: ['display_name', (v: string) => v.trim()],
+  role: ['role', (v: string) => v],
+  active: ['active', (v: boolean) => (v ? 1 : 0)],
+  passwordHash: ['password_hash', (v: string) => v],
 };
 
 /** Builds "a = ?, b = ?" and the values for the fields present in a patch. */
@@ -140,6 +181,32 @@ const toTournament = (r: Row): Tournament => ({
   handForHand: Boolean(r.hand_for_hand),
   money: { ...defaultMoney, ...JSON.parse(String(r.money)) },
   payouts: r.payouts == null ? null : JSON.parse(String(r.payouts)),
+  layoutId: r.layout_id == null ? null : Number(r.layout_id),
+  screen: { ...defaultScreen, ...JSON.parse(String(r.screen)) },
+  createdAt: String(r.created_at),
+});
+
+const toUser = (r: Row): User => ({
+  id: Number(r.id),
+  username: String(r.username),
+  displayName: String(r.display_name),
+  role: String(r.role) as Role,
+  active: Boolean(r.active),
+  createdAt: String(r.created_at),
+});
+
+const toLayout = (r: Row): ScreenLayout => ({
+  ...(JSON.parse(String(r.config)) as LayoutConfig),
+  id: Number(r.id),
+  name: String(r.name),
+  updatedAt: String(r.updated_at),
+});
+
+const toAsset = (r: Row): Asset => ({
+  id: Number(r.id),
+  name: String(r.name),
+  mime: String(r.mime),
+  size: Number(r.size),
   createdAt: String(r.created_at),
 });
 
@@ -333,9 +400,124 @@ export class SqliteStorage implements Storage {
     return toAction(r);
   }
 
-  async listActions(tournamentId: Id) {
+  async listActions(tournamentId: Id, opts?: { types?: string[]; limit?: number }) {
+    if (!opts) {
+      return (
+        this.db.prepare('SELECT * FROM action_log WHERE tournament_id = ? ORDER BY id').all(tournamentId) as Row[]
+      ).map(toAction);
+    }
+    const types = opts.types ?? [];
+    const typeFilter = types.length ? `AND type IN (${types.map(() => '?').join(', ')})` : '';
+    const rows = this.db
+      .prepare(`SELECT * FROM action_log WHERE tournament_id = ? ${typeFilter} ORDER BY id DESC LIMIT ?`)
+      .all(tournamentId, ...types, opts.limit ?? -1) as Row[];
+    return rows.map(toAction);
+  }
+
+  async countUsers() {
+    return Number((this.db.prepare('SELECT COUNT(*) AS n FROM users').get() as Row).n);
+  }
+
+  async listUsers() {
+    return (this.db.prepare('SELECT * FROM users ORDER BY username COLLATE NOCASE').all() as Row[]).map(toUser);
+  }
+
+  async getUser(id: Id) {
+    const r = this.db.prepare('SELECT * FROM users WHERE id = ?').get(id) as Row | undefined;
+    return r ? toUser(r) : null;
+  }
+
+  async getLogin(username: string) {
+    const r = this.db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim()) as Row | undefined;
+    return r ? { user: toUser(r), passwordHash: String(r.password_hash) } : null;
+  }
+
+  async createUser(u: NewUser) {
+    const r = this.db
+      .prepare('INSERT INTO users (username, display_name, role, password_hash) VALUES (?, ?, ?, ?) RETURNING *')
+      .get(u.username.trim(), u.displayName.trim(), u.role, u.passwordHash) as Row;
+    return toUser(r);
+  }
+
+  async updateUser(id: Id, patch: UserPatch) {
+    const { sql, values } = setClause(patch, userColumns);
+    if (sql) this.db.prepare(`UPDATE users SET ${sql} WHERE id = ?`).run(...values, id);
+    return this.getUser(id);
+  }
+
+  async createSession(tokenHash: string, userId: Id, expiresAt: number) {
+    this.db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
+    this.db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(tokenHash, userId, expiresAt);
+  }
+
+  async getSession(tokenHash: string) {
+    const r = this.db
+      .prepare(
+        `SELECT u.*, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+         WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = 1`,
+      )
+      .get(tokenHash, Date.now()) as Row | undefined;
+    return r ? { user: toUser(r), expiresAt: Number(r.expires_at) } : null;
+  }
+
+  async extendSession(tokenHash: string, expiresAt: number) {
+    this.db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').run(expiresAt, tokenHash);
+  }
+
+  async deleteSession(tokenHash: string) {
+    this.db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
+  }
+
+  async deleteUserSessions(userId: Id) {
+    this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  }
+
+  async listLayouts() {
+    return (this.db.prepare('SELECT * FROM layouts ORDER BY name COLLATE NOCASE').all() as Row[]).map(toLayout);
+  }
+
+  async getLayout(id: Id) {
+    const r = this.db.prepare('SELECT * FROM layouts WHERE id = ?').get(id) as Row | undefined;
+    return r ? toLayout(r) : null;
+  }
+
+  async createLayout(name: string, config: LayoutConfig) {
+    const r = this.db
+      .prepare('INSERT INTO layouts (name, config) VALUES (?, ?) RETURNING *')
+      .get(name.trim(), JSON.stringify(config)) as Row;
+    return toLayout(r);
+  }
+
+  async updateLayout(id: Id, name: string, config: LayoutConfig) {
+    const r = this.db
+      .prepare(
+        `UPDATE layouts SET name = ?, config = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ? RETURNING *`,
+      )
+      .get(name.trim(), JSON.stringify(config), id) as Row | undefined;
+    return r ? toLayout(r) : null;
+  }
+
+  async deleteLayout(id: Id) {
+    this.db.prepare('UPDATE tournaments SET layout_id = NULL WHERE layout_id = ?').run(id);
+    this.db.prepare('DELETE FROM layouts WHERE id = ?').run(id);
+  }
+
+  async listAssets() {
     return (
-      this.db.prepare('SELECT * FROM action_log WHERE tournament_id = ? ORDER BY id').all(tournamentId) as Row[]
-    ).map(toAction);
+      this.db.prepare('SELECT id, name, mime, length(data) AS size, created_at FROM assets ORDER BY id DESC').all() as Row[]
+    ).map(toAsset);
+  }
+
+  async createAsset(name: string, mime: string, data: Uint8Array) {
+    const r = this.db
+      .prepare('INSERT INTO assets (name, mime, data) VALUES (?, ?, ?) RETURNING id, name, mime, length(data) AS size, created_at')
+      .get(name, mime, data) as Row;
+    return toAsset(r);
+  }
+
+  async getAssetData(id: Id) {
+    const r = this.db.prepare('SELECT *, length(data) AS size FROM assets WHERE id = ?').get(id) as Row | undefined;
+    return r ? { asset: toAsset(r), data: r.data as Uint8Array } : null;
   }
 }

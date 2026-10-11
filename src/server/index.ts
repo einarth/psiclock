@@ -25,6 +25,9 @@ const lan = Object.values(networkInterfaces())
 console.log(`PSICLOCK is running. Database: ${dbFile}`);
 console.log(`  On this laptop:     http://localhost:${port}`);
 for (const url of lan) console.log(`  On the network:     ${url}`);
+if ((await storage.countUsers()) === 0) {
+  console.log(`\nNo logins yet. Open http://localhost:${port}/login on this laptop to create the first (admin) login.`);
+}
 
 const shutdown = async () => {
   await app.close();

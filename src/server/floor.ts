@@ -96,7 +96,11 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
       const moves = breakTableMoves(t.tables, entries, no, rand);
       if (!moves) throw new ActionError(`not enough free seats to break table ${no}`);
       for (const m of moves) await storage.updateEntry(m.entryId, { ...m.to, bustSeq: null });
-      await storage.updateTournament(t.id, { tables: t.tables.map((x) => (x.number === no ? { ...x, open: false } : x)) });
+      await storage.updateTournament(t.id, {
+        tables: t.tables.map((x) => (x.number === no ? { ...x, open: false } : x)),
+        // Put the moves on the big screens for a minute so players can find their new seats.
+        ...(t.screen.autoMoves && moves.length ? { screen: { ...t.screen, scene: 'moves' as const, until: Date.now() + 60_000 } } : {}),
+      });
       return { result: moves, payload: { table: no, moves } };
     }),
   );

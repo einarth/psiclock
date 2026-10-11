@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app';
 import { SqliteStorage } from './storage/sqlite';
+import { signedIn } from './testing';
 import { defaultStructures } from '../shared/structures';
 import { defaultMoney } from '../shared/money';
 import type { Entry } from '../shared/types';
@@ -10,10 +11,11 @@ describe('desk and money', () => {
   let app: FastifyInstance;
   let storage: SqliteStorage;
   let tid: number;
+  let cookie: string;
   const money = { ...defaultMoney, rebuyPrice: 10000, rebuyChips: 20000, rebuyUntilLevel: 4, addOnPrice: 10000, addOnChips: 30000, lateRegUntilLevel: 4 };
 
   const call = async (method: 'POST' | 'PATCH', url: string, payload?: object) => {
-    const res = await app.inject({ method, url, payload: payload ?? {} });
+    const res = await app.inject({ method, url, payload: payload ?? {}, headers: { cookie } });
     return { status: res.statusCode, body: res.json() };
   };
   const post = (url: string, payload?: object) => call('POST', url, payload);
@@ -28,6 +30,7 @@ describe('desk and money', () => {
     await storage.init();
     const s = await storage.createStructure(defaultStructures[0]);
     app = await buildApp({ storage });
+    cookie = await signedIn(storage);
     const t = await post('/api/tournaments', {
       name: 'Main',
       structureId: s.id,
@@ -97,7 +100,7 @@ describe('desk and money', () => {
     expect((await post(`/api/tournaments/${tid}/entries/${a.id}/paid`)).status).toBe(400);
     const paid = await post(`/api/tournaments/${tid}/entries/${c.id}/paid`);
     expect(paid.body.paidOut).toBe(24000); // 30% of 4 x 20000
-    const csv = (await app.inject({ url: `/api/tournaments/${tid}/results.csv` })).body;
+    const csv = (await app.inject({ url: `/api/tournaments/${tid}/results.csv`, headers: { cookie } })).body;
     const lines = csv.replace('﻿', '').split('\r\n');
     expect(lines[0]).toBe('Place,Name,Full name,Email,Phone,Rebuys,Add-on,Prize,Paid');
     expect(lines[1]).toBe('1,D,,,,0,,56000,');
