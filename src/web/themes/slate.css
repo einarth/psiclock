@@ -1,0 +1,12 @@
+/* Dark slate with an orange accent, thin divider lines and striped lists. */
+[data-theme='slate'] {
+  --d-bg: #1f2433;
+  --d-text: #eef1f6;
+  --d-muted: #8d97ab;
+  --d-accent: #f47b20;
+  --d-warning: #ff5d5d;
+  --d-line: rgba(255, 255, 255, 0.12);
+  --d-stripe: rgba(255, 255, 255, 0.04);
+  --d-band: #191d2a;
+  --d-font: 'Segoe UI', system-ui, sans-serif;
+}

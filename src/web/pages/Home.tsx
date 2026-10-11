@@ -15,7 +15,7 @@ export function Home() {
   const [templates, setTemplates] = useState<TournamentTemplate[]>([]);
   // "" = blank, "t:<id>" = a saved template, "c:<id>" = a copy of an earlier tournament.
   const [source, setSource] = useState('');
-  const [form, setForm] = useState({ name: '', buyIn: 0, fee: 0, startingStack: 30000, structureId: 0, theme: 'classic', tableCount: 10, seatsPerTable: 9 });
+  const [form, setForm] = useState({ name: '', buyIn: 0, fee: 0, startingStack: 30000, structureId: 0, theme: 'slate', tableCount: 10, seatsPerTable: 9 });
   const isDirector = hasRole(user, 'director');
 
   const load = () => {

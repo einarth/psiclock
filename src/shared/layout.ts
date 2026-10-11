@@ -26,6 +26,7 @@ export const widgetTypes = [
   'lateReg',
   'payouts',
   'bustouts',
+  'structure',
   'sponsor',
   'message',
 ] as const;
@@ -44,7 +45,7 @@ export interface Widget {
   text?: string;
   /** Sponsor widget image. */
   assetId?: number;
-  /** How many rows the bustouts widget lists. */
+  /** How many rows the bustouts, payouts or blind structure widget lists. */
   count?: number;
 }
 
@@ -82,6 +83,7 @@ export const widgetNames: Record<WidgetType, string> = {
   lateReg: 'Late registration countdown',
   payouts: 'Payout table',
   bustouts: 'Recent bustouts',
+  structure: 'Blind structure (coming levels)',
   sponsor: 'Sponsor logo',
   message: 'Message',
 };
@@ -107,7 +109,7 @@ export const zoneNames: Record<Zone, string> = {
  * takes the place of the late-registration countdown once the money is final.
  */
 export const defaultLayout: LayoutConfig = {
-  theme: 'classic',
+  theme: 'slate',
   colors: {},
   backgroundAssetId: null,
   zones: {
@@ -144,7 +146,7 @@ export function layoutError(l: unknown): string | null {
       if (w.show !== undefined && !showValues.includes(w.show)) return `bad visibility for ${w.type}`;
       if (w.text !== undefined && (typeof w.text !== 'string' || w.text.length > 500)) return 'message too long';
       if (w.assetId !== undefined && !isId(w.assetId)) return 'bad sponsor image';
-      if (w.count !== undefined && !(Number.isInteger(w.count) && w.count >= 1 && w.count <= 30)) return 'bustouts count must be 1 to 30';
+      if (w.count !== undefined && !(Number.isInteger(w.count) && w.count >= 1 && w.count <= 30)) return 'number of rows must be 1 to 30';
     }
   }
   return null;

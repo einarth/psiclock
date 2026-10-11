@@ -456,6 +456,7 @@ function ZoneEditor({
     if (type === 'payouts') w.show = 'moneyFinal';
     if (type === 'lateReg') w.show = 'moneyOpen';
     if (type === 'bustouts') w.count = 5;
+    if (type === 'structure') w.count = 8;
     if (type === 'message') w.text = '';
     onChange([...widgets, w]);
   };
@@ -498,14 +499,14 @@ function ZoneEditor({
               onChange={(e) => set(i, { ...w, text: e.target.value })}
             />
           )}
-          {w.type === 'bustouts' && (
+          {(w.type === 'bustouts' || w.type === 'structure' || w.type === 'payouts') && (
             <label className="inline">
               Rows
               <input
                 type="number"
                 min={1}
                 max={30}
-                value={w.count ?? 5}
+                value={w.count ?? { structure: 8, payouts: 10 }[w.type as string] ?? 5}
                 onChange={(e) => set(i, { ...w, count: Math.max(1, Math.min(30, Number(e.target.value) || 1)) })}
               />
             </label>

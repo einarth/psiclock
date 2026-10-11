@@ -1,5 +1,5 @@
-import type { CSSProperties, ReactNode } from 'react';
-import { formatClock, msUntilEndOfLevel, msUntilNextBreak, type ClockView } from '../../shared/clock';
+import { cloneElement, isValidElement, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { formatClock, minutesToMs, msUntilEndOfLevel, msUntilNextBreak, type ClockView } from '../../shared/clock';
 import { averageStack, moneyFinal, moneySummary, payoutsFor } from '../../shared/money';
 import { finishingPlace, isAlive } from '../../shared/seating';
 import { zones, type LayoutConfig, type Widget, type Zone } from '../../shared/layout';
@@ -100,6 +100,9 @@ interface Panel {
  * stays in the middle of the screen even when only one side has something in
  * it. Top and bottom bars share their width equally between their panels.
  */
+/** Widgets that list rows. A bottom bar holding one is made tall enough to read it. */
+const listTypes = new Set<string>(['payouts', 'bustouts', 'structure']);
+
 function ClockScene({ d }: { d: Data }) {
   const panels = Object.fromEntries(
     zones.map((z) => [
@@ -116,7 +119,7 @@ function ClockScene({ d }: { d: Data }) {
     '--side': sides ? '23cqw' : '0px',
     '--col-gap': sides ? '1.4cqw' : '0px',
     '--top': panels.top.length ? '10cqh' : '0px',
-    '--bottom': panels.bottom.length ? '13cqh' : '0px',
+    '--bottom': !panels.bottom.length ? '0px' : panels.bottom.some(({ w }) => listTypes.has(w.type)) ? '36cqh' : '13cqh',
     '--row-gap-top': panels.top.length ? '1.6cqh' : '0px',
     '--row-gap-bottom': panels.bottom.length ? '1.6cqh' : '0px',
   } as CSSProperties;
@@ -177,6 +180,11 @@ function MainPanel({ widgets, d }: { widgets: Widget[]; d: Data }) {
           <div className="main-clock-box">
             <div className={`main-clock${low ? ' low' : ''}${view.running ? '' : ' paused'}`}>{formatClock(view.remainingMs)}</div>
             {!view.running && !view.finished && <div className="main-paused">{t.status === 'setup' ? 'Starting soon' : 'Paused'}</div>}
+            {view.level && (
+              <div className="main-progress">
+                <div style={{ width: `${Math.min(100, Math.max(0, 100 - (100 * view.remainingMs) / minutesToMs(view.level.minutes)))}%` }} />
+              </div>
+            )}
           </div>
         )}
         {has('blinds') &&
@@ -251,8 +259,11 @@ function panelFor(w: Widget, d: Data): Panel | null {
     }
     case 'payouts': {
       if (!d.prizes.length || d.summary.prizePool === 0) return null;
-      return { label: 'Payouts', body: <PayoutList d={d} />, grow: Math.min(4, 1 + d.prizes.length / 4) };
+      const rows = Math.min(w.count ?? 10, d.prizes.length);
+      return { label: 'Payouts', body: <PayoutList d={d} max={w.count ?? 10} />, grow: 1 + rows / 4 };
     }
+    case 'structure':
+      return { label: 'Blind structure', body: <Structure d={d} count={w.count ?? 8} />, grow: 1 + (w.count ?? 8) / 4 };
     case 'bustouts': {
       const list = <Bustouts d={d} count={w.count ?? 5} />;
       return d.entries.some((e) => e.bustSeq !== null) ? { label: 'Recent bustouts', body: list, grow: 1 + (w.count ?? 5) / 4 } : null;
@@ -264,21 +275,25 @@ function panelFor(w: Widget, d: Data): Panel | null {
   }
 }
 
-function PayoutList({ d }: { d: Data }) {
-  const max = 18;
+function PayoutList({ d, max }: { d: Data; max: number }) {
   const rows = d.prizes.slice(0, max);
   const lines = rows.length + (d.prizes.length > max ? 1 : 0);
   return (
     <div className="w-list" style={{ '--rows': lines } as CSSProperties}>
       {rows.map((p, i) => (
         <div key={i} className={`w-row${d.placed.has(i + 1) ? ' done' : ''}`}>
-          <span className="muted">{ordinal(i + 1)}</span>
-          <span>{num(p)}</span>
+          <span className="num">{ordinal(i + 1)}</span>
+          <span className="acc">{num(p)}</span>
+          <span className="end muted">{d.summary.prizePool ? `${Math.round((1000 * p) / d.summary.prizePool) / 10}%` : ''}</span>
         </div>
       ))}
       {d.prizes.length > max && (
         <div className="w-row muted">
-          {ordinal(max + 1)} to {ordinal(d.prizes.length)}: {num(d.prizes[max])} down to {num(d.prizes.at(-1)!)}
+          <span className="num">{ordinal(max + 1)}+</span>
+          <span>
+            {num(d.prizes[max])} to {num(d.prizes.at(-1)!)}
+          </span>
+          <span className="end">to {ordinal(d.prizes.length)}</span>
         </div>
       )}
     </div>
@@ -297,12 +312,30 @@ function Bustouts({ d, count }: { d: Data; count: number }) {
         const prize = d.prizes[place - 1];
         return (
           <div key={e.id} className="w-row">
-            <span className="muted">{ordinal(place)}</span>
+            <span className="num">{ordinal(place)}</span>
             <span className="w-name">{e.playerName}</span>
-            {prize ? <span className="w-prize">{num(prize)}</span> : null}
+            <span className="end acc">{prize ? num(prize) : ''}</span>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** The coming levels, starting with the one being played. */
+function Structure({ d, count }: { d: Data; count: number }) {
+  const { t, view } = d;
+  const numbers = t.levels.map((_, i) => t.levels.slice(0, i + 1).filter((l) => l.kind === 'level').length);
+  const rows = t.levels.map((l, i) => ({ l, i })).slice(view.levelIndex, view.levelIndex + count);
+  return (
+    <div className="w-list" style={{ '--rows': Math.max(rows.length, Math.min(count, 5)) } as CSSProperties}>
+      {rows.map(({ l, i }) => (
+        <div key={i} className={`w-row${i === view.levelIndex ? ' current' : ''}`}>
+          <span className="num">{l.kind === 'level' ? numbers[i] : ''}</span>
+          <span>{l.kind === 'level' ? blindsText(l) : 'Break'}</span>
+          <span className="end acc">{l.minutes}'</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -349,7 +382,13 @@ function Paged({ title, items, now }: { title: string; items: ReactNode[]; now: 
         className="scene-columns"
         style={{ '--rows': rows, '--cols': cols, maxWidth: `${cols * 25}cqw`, fontSize: `${Math.min(4.5, 72 / rows)}cqh` } as CSSProperties}
       >
-        {shown}
+        {shown.map((item, i) =>
+          isValidElement(item) && i % rows % 2 === 0
+            ? cloneElement(item as ReactElement<{ className?: string }>, {
+                className: `${(item as ReactElement<{ className?: string }>).props.className ?? ''} odd`,
+              })
+            : item,
+        )}
       </div>
     </>
   );
@@ -397,7 +436,7 @@ export function PayoutBoard({ d }: { d: Data }) {
         {d.prizes.map((p, i) => {
           const who = d.placed.get(i + 1);
           return (
-            <div key={i} className={who ? 'done' : ''}>
+            <div key={i} className={`${who ? 'done' : ''}${(i % rows) % 2 === 0 ? ' odd' : ''}`}>
               <span className="muted">{ordinal(i + 1)}</span>
               {who && <span className="who">{who.playerName}</span>}
               <span>{num(p)}</span>
