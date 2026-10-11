@@ -110,6 +110,20 @@ describe('floor actions', () => {
     expect((await storage.getTournament(tid))!.clock.running).toBe(true);
   });
 
+  it('lets floor staff pause and resume the clock but not start the tournament', async () => {
+    const floor = await signedIn(storage, 'floor');
+    const run = async (running: boolean) =>
+      app.inject({ method: 'POST', url: `/api/tournaments/${tid}/clock/run`, payload: { running }, headers: { cookie: floor } });
+    expect((await run(true)).statusCode).toBe(400);
+    const start = await app.inject({ method: 'POST', url: `/api/tournaments/${tid}/clock`, payload: { type: 'clock.start' }, headers: { cookie: floor } });
+    expect(start.statusCode).toBe(403);
+    await post(`/api/tournaments/${tid}/clock`, { type: 'clock.start' });
+    expect((await run(false)).statusCode).toBe(200);
+    expect((await storage.getTournament(tid))!.clock.running).toBe(false);
+    expect((await run(true)).statusCode).toBe(200);
+    expect((await storage.getTournament(tid))!.clock.running).toBe(true);
+  });
+
   it('saves a tournament as a template and starts a new one from it', async () => {
     await app.inject({ method: 'PATCH', url: `/api/tournaments/${tid}`, payload: { buyIn: 15000, payouts: [60, 40] }, headers: { cookie } });
     const saved = await post('/api/templates', { name: 'Monday', tournamentId: tid });

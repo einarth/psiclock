@@ -121,6 +121,7 @@ export const api = {
   redraw: (id: number, table: number) => call<unknown>('POST', `/api/tournaments/${id}/tables/${table}/redraw`),
   handForHand: (id: number, on: boolean, pauseClock = false) =>
     call<{ on: boolean; clock: 'paused' | 'resumed' | 'unchanged' }>('POST', `/api/tournaments/${id}/hand-for-hand`, { on, pauseClock }),
+  floorClock: (id: number, running: boolean) => call<{ running: boolean }>('POST', `/api/tournaments/${id}/clock/run`, { running }),
   templates: () => call<TournamentTemplate[]>('GET', '/api/templates'),
   saveTemplate: (name: string, tournamentId: number) => call<TournamentTemplate>('POST', '/api/templates', { name, tournamentId }),
   deleteTemplate: (id: number) => call<unknown>('DELETE', `/api/templates/${id}`, {}),

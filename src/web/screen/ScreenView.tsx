@@ -221,7 +221,22 @@ function MainPanel({ widgets, d }: { widgets: Widget[]; d: Data }) {
 /** What a widget shows when it sits in a frame of its own; null hides it. */
 function panelFor(w: Widget, d: Data): Panel | null {
   const { t, view } = d;
-  const value = (v: ReactNode) => <div className="panel-value">{v}</div>;
+  // --chars lets long figures (big blinds, long names) shrink to fit a narrow column.
+  const value = (v: string | number) => (
+    <div className="panel-value" style={{ '--chars': Math.max(6, String(v).length) } as CSSProperties}>
+      {v}
+    </div>
+  );
+  // Blinds on one line, the ante smaller underneath, so they fit a side column.
+  const blinds = (l: ClockView['level'] | ClockView['nextLevel']) =>
+    l?.kind === 'level' ? (
+      <>
+        {value(`${num(l.smallBlind)} / ${num(l.bigBlind)}`)}
+        {l.ante > 0 && <div className="panel-sub">Ante {num(l.ante)}</div>}
+      </>
+    ) : (
+      value(l ? 'Break' : 'Final level')
+    );
   switch (w.type) {
     case 'title':
       return { body: <div className="panel-title">{t.name}</div> };
@@ -230,9 +245,9 @@ function panelFor(w: Widget, d: Data): Panel | null {
     case 'clock':
       return { label: d.isBreak ? 'Break ends in' : 'Level ends in', body: value(formatClock(view.remainingMs)) };
     case 'blinds':
-      return { label: 'Blinds', body: value(d.isBreak ? 'Break' : blindsText(view.level)) };
+      return { label: 'Blinds', body: blinds(view.level) };
     case 'next':
-      return { label: 'Next level', body: value(view.nextLevel ? blindsText(view.nextLevel) : 'Final level') };
+      return { label: 'Next level', body: blinds(view.nextLevel) };
     case 'players':
       return { label: 'Players', body: value(`${d.remaining} / ${d.entries.length}`) };
     case 'avgStack':

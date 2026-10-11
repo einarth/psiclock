@@ -105,7 +105,24 @@ export function Floor({ id }: { id: number }) {
           <span>{blindsText(view.level)}</span>
         </div>
         {!connected && <div className="floor-alert danger">Lost connection, reconnecting...</div>}
-        {t.handForHand ? (
+        {t.status === 'running' && !view.finished && (
+          <div className="floor-controls">
+            <button
+              className={view.running ? '' : 'primary'}
+              onClick={() =>
+                act(() => api.floorClock(id, !view.running), view.running ? 'Clock paused' : 'Clock resumed')
+              }
+            >
+              {view.running ? 'Pause clock' : 'Resume clock'}
+            </button>
+            {!t.handForHand && (
+              <button className="floor-hfh-start" onClick={() => setSheet({ kind: 'handForHand' })}>
+                Play hand for hand
+              </button>
+            )}
+          </div>
+        )}
+        {t.handForHand && (
           <div className="floor-alert hfh">
             <span>Playing hand for hand</span>
             <button
@@ -119,7 +136,8 @@ export function Floor({ id }: { id: number }) {
               Stop hand-for-hand play
             </button>
           </div>
-        ) : (
+        )}
+        {t.status !== 'running' && !t.handForHand && (
           <button className="floor-hfh-start" onClick={() => setSheet({ kind: 'handForHand' })}>
             Play hand for hand
           </button>

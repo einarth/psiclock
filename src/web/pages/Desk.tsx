@@ -108,7 +108,7 @@ export function Desk({ id }: { id: number }) {
       <header className="page-head">
         <h1>{t.name}: desk</h1>
         <nav>
-          <a href="/">All tournaments</a>
+          <a href="/">Home</a>
           {hasRole(me?.user, 'director') && <a href={`/director/${id}`}>Director</a>}
           <a href={`/floor/${id}`}>Floor</a>
           <a href={`/api/tournaments/${id}/results.csv`}>Results (CSV)</a>

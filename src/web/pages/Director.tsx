@@ -29,7 +29,7 @@ export function Director({ id }: { id: number }) {
       <header className="page-head">
         <h1>{t.name}</h1>
         <nav>
-          <a href="/">All tournaments</a>
+          <a href="/">Home</a>
           <a href={`/desk/${id}`}>Desk</a>
           <a href={`/floor/${id}`}>Floor</a>
           <a href={`/display/${id}`} target="_blank" rel="noreferrer">

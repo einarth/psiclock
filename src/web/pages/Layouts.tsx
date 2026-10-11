@@ -192,7 +192,7 @@ export function Layouts() {
       <header className="page-head">
         <h1>Screen layouts</h1>
         <nav>
-          <a href="/">All tournaments</a>
+          <a href="/">Home</a>
         </nav>
       </header>
 

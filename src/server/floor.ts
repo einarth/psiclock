@@ -135,4 +135,20 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
       return { result: { on, clock }, payload: { on, clock } };
     }),
   );
+
+  // Floor staff may pause and resume a running tournament's clock. Starting it,
+  // changing levels and adjusting time stay with the director.
+  app.post<{ Params: P; Body: { running?: boolean } }>('/api/tournaments/:id/clock/run', (req, reply) =>
+    run(reply, Number(req.params.id), 'tournament.floorClock', 'floor', async ({ t }) => {
+      const running = Boolean(req.body?.running);
+      const now = Date.now();
+      const view = clockAt(t.levels, t.clock, now);
+      if (t.status !== 'running' || view.finished) throw new ActionError('the director has to start the tournament first');
+      if (view.running !== running) {
+        const command = running ? 'clock.start' : 'clock.pause';
+        await storage.updateTournamentClock(t.id, applyClockCommand(t.levels, t.clock, { type: command }, now), t.status);
+      }
+      return { result: { running }, payload: { running } };
+    }),
+  );
 }

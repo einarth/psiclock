@@ -46,7 +46,7 @@ export function Users() {
       <header className="page-head">
         <h1>Logins</h1>
         <nav>
-          <a href="/">All tournaments</a>
+          <a href="/">Home</a>
         </nav>
       </header>
 
