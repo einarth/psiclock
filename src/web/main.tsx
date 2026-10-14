@@ -29,4 +29,17 @@ function route() {
   return <Home />;
 }
 
+// Clicking or tabbing into a number field selects what is in it, so typing
+// replaces the value (such as a default 0) instead of adding to it.
+let pointerDownAt = 0;
+document.addEventListener('pointerdown', () => (pointerDownAt = Date.now()), true);
+document.addEventListener('focusin', (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement)) return;
+  if (el.type !== 'number' && el.inputMode !== 'numeric' && el.inputMode !== 'decimal') return;
+  el.select();
+  // A click would put the cursor back where the mouse was once the button is released.
+  if (Date.now() - pointerDownAt < 1000) el.addEventListener('mouseup', (m) => m.preventDefault(), { once: true });
+});
+
 createRoot(document.getElementById('root')!).render(route());
