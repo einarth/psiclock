@@ -93,9 +93,6 @@ export function Home() {
                 <a href={`/display/${t.id}`} target="_blank" rel="noreferrer">
                   Big screen
                 </a>
-                <a href={`/payouts/${t.id}`} target="_blank" rel="noreferrer">
-                  Payouts
-                </a>
               </span>
             </li>
           ))}
