@@ -36,9 +36,6 @@ export function Director({ id }: { id: number }) {
           <a href={`/display/${id}`} target="_blank" rel="noreferrer">
             Open big screen
           </a>
-          <a href={`/payouts/${id}`} target="_blank" rel="noreferrer">
-            Payout screen
-          </a>
         </nav>
       </header>
       {!connected && <p className="error">Lost connection to the server, reconnecting...</p>}
