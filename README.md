@@ -29,6 +29,27 @@ Anyone on the network can open the big screens without a login; everything else 
 On Windows the first start may ask to allow Node.js through the firewall; allow it on
 private networks so other devices can connect.
 
+## Packaging as one .exe
+
+```
+npm install
+npm run package
+```
+
+This builds `dist\psiclock.exe` (about 90 MB): the Node.js that ran the command with the
+server and the web app inside, so the venue laptop needs nothing else installed. Copy it to
+the laptop and double-click it; it opens the Home page in the browser. Keep its window open
+while the tournament runs, since closing it stops PSICLOCK.
+
+The data is not inside the exe. It is kept in `psiclock.db` in the same folder as the exe
+(created on the first start; `PSICLOCK_DB=path` puts it elsewhere). To update PSICLOCK,
+replace the exe and keep the `.db` file. To back up, copy the `.db` file while PSICLOCK is
+stopped.
+
+Build on the kind of computer it will run on: Windows for Windows. The exe is not code-signed,
+so the first time Windows SmartScreen shows "Windows protected your PC"; choose More info,
+then Run anyway. Windows also asks about the firewall; allow private networks.
+
 ## Developing
 
 ```

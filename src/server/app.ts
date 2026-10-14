@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
+import { extname } from 'node:path';
 import type { Storage } from './storage/storage.js';
 import { Hub } from './hub.js';
 import { registerFloorRoutes } from './floor.js';
@@ -18,6 +19,8 @@ export interface AppOptions {
   storage: Storage;
   /** Folder with the built web app; omitted in dev, where Vite serves it. */
   webRoot?: string;
+  /** Or the web app's files embedded in the packaged .exe, looked up by path such as 'index.html'. */
+  webFiles?: (path: string) => Buffer | null;
   logger?: boolean;
   /** Random source for seat draws; tests pass a fixed one. */
   rand?: Rand;
@@ -25,7 +28,20 @@ export interface AppOptions {
 
 const clockCommands = new Set(['clock.start', 'clock.pause', 'clock.adjust', 'clock.setLevel']);
 
-export async function buildApp({ storage, webRoot, logger = false, rand }: AppOptions): Promise<FastifyInstance> {
+const contentTypes: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+};
+
+export async function buildApp({ storage, webRoot, webFiles, logger = false, rand }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger });
   const hub = new Hub();
   await app.register(websocket);
@@ -197,6 +213,19 @@ export async function buildApp({ storage, webRoot, logger = false, rand }: AppOp
     app.setNotFoundHandler((req, reply) =>
       req.url.startsWith('/api') ? reply.code(404).send({ error: 'not found' }) : reply.sendFile('index.html'),
     );
+  } else if (webFiles) {
+    app.setNotFoundHandler((req, reply) => {
+      if (req.url.startsWith('/api')) return reply.code(404).send({ error: 'not found' });
+      const path = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '');
+      const file = path ? webFiles(path) : null;
+      if (file) {
+        // Built files have a content hash in their name, so they never change.
+        const cache = path.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
+        return reply.type(contentTypes[extname(path)] ?? 'application/octet-stream').header('cache-control', cache).send(file);
+      }
+      // Client-side routes such as /display/3 all load the same page.
+      return reply.type(contentTypes['.html']).header('cache-control', 'no-cache').send(webFiles('index.html'));
+    });
   }
 
   return app;
