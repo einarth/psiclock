@@ -58,6 +58,7 @@ tr.past { color: var(--muted); }
 .control-level { font-size: 1.2rem; margin-bottom: 16px; }
 .control-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .control-start { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin-bottom: 16px; }
+.control-end { margin-top: 16px; }
 .control-winner { text-align: center; font-size: 1.1rem; margin: 0 0 16px; }
 
 /* Big screen: layout only. Colours and fonts come from the theme files via these variables.
@@ -168,6 +169,11 @@ tr.past { color: var(--muted); }
 .winner-next > div + div { border-left: 1px solid var(--line); }
 .winner-next .num { color: var(--d-muted); }
 .winner-next .acc { color: var(--d-accent); font-variant-numeric: tabular-nums; }
+.ended-names { display: flex; flex-wrap: wrap; justify-content: center; max-width: 90cqw; font-size: min(7cqh, calc(36cqw / var(--n))); font-weight: 600; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ended-names > div { padding: 1.4cqh 2.5cqw; }
+.ended-names > div:nth-child(odd) { background: var(--stripe); }
+.ended-share { font-size: 3.6cqh; color: var(--d-muted); }
+.ended-share .acc { color: var(--d-accent); font-variant-numeric: tabular-nums; }
 .main-starts { color: var(--d-muted); margin-bottom: 1cqh; }
 .scene-message { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 9cqh; font-weight: 700; white-space: pre-wrap; }
 .payout-board { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1cqh; }

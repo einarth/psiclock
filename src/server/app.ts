@@ -185,12 +185,26 @@ export async function buildApp({ storage, webRoot, webFiles, logger = false, ran
     return reply.code(201).send(t);
   });
 
+  app.delete<{ Params: { id: string } }>('/api/tournaments/:id', async (req, reply) => {
+    const id = Number(req.params.id);
+    const t = await storage.getTournament(id);
+    if (!t) return reply.code(404).send({ error: 'tournament not found' });
+    await storage.transaction(async () => {
+      await storage.deleteTournament(id);
+      await storage.appendAction({ tournamentId: null, type: 'tournament.delete', payload: { id, name: t.name, status: t.status }, actor: actorOf(req, 'director') });
+    });
+    return reply.code(204).send();
+  });
+
   app.post<{ Params: { id: string }; Body: ClockCommand }>('/api/tournaments/:id/clock', async (req, reply) => {
     const id = Number(req.params.id);
     const cmd = req.body;
     if (!cmd || !clockCommands.has(cmd.type)) return reply.code(400).send({ error: 'unknown clock command' });
     const t = await storage.getTournament(id);
     if (!t) return reply.code(404).send({ error: 'tournament not found' });
+    if (t.status === 'finished' && cmd.type === 'clock.start') {
+      return reply.code(400).send({ error: 'the tournament has finished; reopen it first' });
+    }
     const now = Date.now();
     const clock = applyClockCommand(t.levels, t.clock, cmd, now);
     const finished = clockAt(t.levels, clock, now).finished;

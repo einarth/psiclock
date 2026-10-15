@@ -92,6 +92,8 @@ const access: Record<string, Role | 'public' | 'signedIn'> = {
   'POST /api/structures': 'director',
   'POST /api/tournaments': 'director',
   'PATCH /api/tournaments/:id': 'director',
+  'DELETE /api/tournaments/:id': 'director',
+  'POST /api/tournaments/:id/finish': 'director',
   'POST /api/tournaments/:id/clock': 'director',
   'PUT /api/tournaments/:id/levels': 'director',
   'POST /api/tournaments/:id/screen': 'director',

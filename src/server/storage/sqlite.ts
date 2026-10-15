@@ -407,6 +407,12 @@ export class SqliteStorage implements Storage {
     this.db.prepare('UPDATE tournaments SET levels = ?, clock = ? WHERE id = ?').run(JSON.stringify(levels), JSON.stringify(clock), id);
   }
 
+  async deleteTournament(id: Id) {
+    this.db.prepare('DELETE FROM entries WHERE tournament_id = ?').run(id);
+    this.db.prepare('DELETE FROM action_log WHERE tournament_id = ?').run(id);
+    this.db.prepare('DELETE FROM tournaments WHERE id = ?').run(id);
+  }
+
   async updateTournament(id: Id, patch: TournamentPatch) {
     const { sql, values } = setClause(patch, tournamentColumns);
     if (sql) this.db.prepare(`UPDATE tournaments SET ${sql} WHERE id = ?`).run(...values, id);

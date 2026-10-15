@@ -90,7 +90,15 @@ export function ScreenView(props: ScreenProps) {
   return (
     <div className="screen" data-theme={props.layout.theme} style={themeStyle(props.layout)}>
       {bg && <img className="screen-bg" src={`/api/assets/${bg}`} alt="" />}
-      {props.scene !== 'clock' ? <OtherScene d={d} /> : d.winner ? <WinnerScene d={d} winner={d.winner} /> : <ClockScene d={d} />}
+      {props.scene !== 'clock' ? (
+        <OtherScene d={d} />
+      ) : d.winner ? (
+        <WinnerScene d={d} winner={d.winner} />
+      ) : d.t.status === 'finished' && d.remaining > 1 ? (
+        <EndedScene d={d} />
+      ) : (
+        <ClockScene d={d} />
+      )}
     </div>
   );
 }
@@ -398,6 +406,35 @@ function WinnerScene({ d, winner }: { d: Data; winner: Entry }) {
                 {prize ? <span className="acc"> {num(prize)}</span> : null}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Ended early, usually on a deal: who is left, and the prize pool. */
+function EndedScene({ d }: { d: Data }) {
+  const left = d.entries.filter(isAlive).sort((a, b) => a.playerName.localeCompare(b.playerName, 'is'));
+  const toShare = d.prizes.slice(0, left.length).reduce((a, b) => a + b, 0);
+  return (
+    <div className="scene winner-scene">
+      <header className="panel scene-head">
+        <span className="scene-title">{d.t.name}</span>
+        <span className="scene-clock">Finished</span>
+      </header>
+      <div className="panel scene-panel winner-panel">
+        <div className="winner-label">Prize pool</div>
+        <div className="winner-prize">{num(d.summary.prizePool)}</div>
+        <div className="winner-label">{left.length} players left</div>
+        <div className="ended-names" style={{ '--n': left.length } as CSSProperties}>
+          {left.map((e) => (
+            <div key={e.id}>{e.playerName}</div>
+          ))}
+        </div>
+        {toShare > 0 && toShare < d.summary.prizePool && (
+          <div className="ended-share">
+            Places 1 to {left.length} pay <span className="acc">{num(toShare)}</span>
           </div>
         )}
       </div>

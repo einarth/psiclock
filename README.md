@@ -72,9 +72,9 @@ npm run typecheck
 
 | Path | Who | What |
 | --- | --- | --- |
-| `/` | Anyone | List tournaments; staff see their links, directors can create tournaments |
+| `/` | Anyone | List tournaments; staff see their links, directors can create and delete tournaments |
 | `/login` | Staff | Sign in; on a fresh install, create the first (admin) login from the laptop |
-| `/director/:id` | Director | Manage: run the clock and set the planned start time; buy-in, rebuy, add-on, late registration and guarantee settings; payout table (automatic about 15% paid, or edit the percentages by hand) and prize pool (what was paid in, or set by hand) |
+| `/director/:id` | Director | Manage: run the clock, set the planned start time, end the tournament early for a deal; buy-in, rebuy, add-on, late registration and guarantee settings; payout table (automatic about 15% paid, or edit the percentages by hand) and prize pool (what was paid in, or set by hand) |
 | `/desk/:id` | Desk | Registrations: register and seat players, fill in their details later (double-click a name), take rebuys and add-ons (shows the amount to collect), prize pool summary, mark prizes paid, results as CSV |
 | `/floor/:id` | Floor staff | Phone or tablet view: bust players (with undo), move players, balance and break tables, redraw seats, hand-for-hand |
 | `/display/:id` | Big screen (no login) | Whatever the director puts on the screens: the clock layout, seating, player moves, payouts or a message. Click once for full screen and sound. `?scene=payouts` pins a TV to one scene, `?theme=midnight` overrides the theme |

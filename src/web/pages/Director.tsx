@@ -27,6 +27,17 @@ export function Director({ id }: { id: number }) {
   if (!t || !view) return <main className="page">{connected ? 'Tournament not found.' : 'Connecting...'}</main>;
   const alive = entries.filter(isAlive);
   const winner = t.status === 'finished' && alive.length === 1 ? alive[0] : null;
+  const endedWithPlayers = t.status === 'finished' && alive.length > 1;
+
+  const finish = async (finished: boolean) => {
+    if (finished && !confirm(`End the tournament now with ${alive.length} players left? The clock stops and the big screen shows the players left and the prize pool.`)) return;
+    setError('');
+    try {
+      await api.finishTournament(id, finished);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
 
   return (
     <main className="page">
@@ -53,6 +64,14 @@ export function Director({ id }: { id: number }) {
             Finished. <strong>{winner.playerName}</strong> won. Undo the last bust on the Floor page to carry on.
           </p>
         )}
+        {endedWithPlayers && (
+          <p className="control-winner">
+            Ended with {alive.length} players left.{' '}
+            <button className="link" onClick={() => finish(false)}>
+              Reopen the tournament
+            </button>
+          </p>
+        )}
         {t.status === 'setup' && <StartTime t={t} />}
         <div className="control-buttons">
           <button onClick={() => send({ type: 'clock.setLevel', levelIndex: view.levelIndex - 1 })}>Previous level</button>
@@ -62,13 +81,20 @@ export function Director({ id }: { id: number }) {
               Pause
             </button>
           ) : (
-            <button className="primary" onClick={() => send({ type: 'clock.start' })} disabled={view.finished || !!winner}>
+            <button className="primary" onClick={() => send({ type: 'clock.start' })} disabled={view.finished || t.status === 'finished'}>
               {t.status === 'setup' ? 'Start tournament' : 'Resume'}
             </button>
           )}
           <button onClick={() => send({ type: 'clock.adjust', deltaMs: 60_000 })}>+1 min</button>
           <button onClick={() => send({ type: 'clock.setLevel', levelIndex: view.levelIndex + 1 })}>Next level</button>
         </div>
+        {t.status === 'running' && alive.length > 1 && (
+          <div className="control-end">
+            <button onClick={() => finish(true)}>
+              End tournament (deal)
+            </button>
+          </div>
+        )}
         {error && <p className="error">{error}</p>}
       </section>
 

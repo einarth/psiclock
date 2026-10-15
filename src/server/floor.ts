@@ -38,6 +38,7 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
   app.post<{ Params: PE }>('/api/tournaments/:id/entries/:entryId/bust', (req, reply) =>
     run(reply, Number(req.params.id), 'entry.bust', 'floor', async ({ t, entries, entry }) => {
       const e = entry(req.params.entryId);
+      if (t.status === 'finished') throw new ActionError('the tournament has finished');
       if (!isAlive(e)) throw new ActionError(`${e.playerName} is already out`);
       if (entries.filter(isAlive).length === 1) throw new ActionError(`${e.playerName} is the last player left`);
       const bustSeq = Math.max(0, ...entries.map((x) => x.bustSeq ?? 0)) + 1;
@@ -145,6 +146,24 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
 
   // Floor staff may pause and resume a running tournament's clock. Starting it,
   // changing levels and adjusting time stay with the director.
+  // End the tournament with players still in, when they agree a deal; or reopen it.
+  app.post<{ Params: P; Body: { finished?: boolean } }>('/api/tournaments/:id/finish', (req, reply) =>
+    run(reply, Number(req.params.id), 'tournament.finish', 'director', async ({ t, entries }) => {
+      const finished = req.body?.finished !== false;
+      const alive = entries.filter(isAlive).length;
+      if (finished) {
+        if (t.status !== 'running') throw new ActionError('only a running tournament can be ended');
+        const clock = applyClockCommand(t.levels, t.clock, { type: 'clock.pause' }, Date.now());
+        await storage.updateTournamentClock(t.id, clock, 'finished');
+      } else {
+        if (t.status !== 'finished') throw new ActionError('the tournament has not finished');
+        if (alive < 2) throw new ActionError('one player is left; undo the last bust on the Floor page instead');
+        await storage.updateTournament(t.id, { status: 'running' });
+      }
+      return { result: { finished, playersLeft: alive }, payload: { finished, playersLeft: alive } };
+    }),
+  );
+
   app.post<{ Params: P; Body: { running?: boolean } }>('/api/tournaments/:id/clock/run', (req, reply) =>
     run(reply, Number(req.params.id), 'tournament.floorClock', 'floor', async ({ t }) => {
       const running = Boolean(req.body?.running);

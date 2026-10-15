@@ -12,6 +12,7 @@ export function Home() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [structures, setStructures] = useState<BlindStructure[]>([]);
   const [error, setError] = useState('');
+  const [listError, setListError] = useState('');
   const [templates, setTemplates] = useState<TournamentTemplate[]>([]);
   // "" = blank, "t:<id>" = a saved template, "c:<id>" = a copy of an earlier tournament.
   const [source, setSource] = useState('');
@@ -65,6 +66,26 @@ export function Home() {
     }
   };
 
+  const remove = async (t: Tournament) => {
+    if (t.status === 'setup') {
+      if (!confirm(`Delete "${t.name}"? Its registrations go with it.`)) return;
+    } else {
+      const typed = prompt(
+        `"${t.name}" has ${t.status === 'running' ? 'started and is still running' : 'been played'}. ` +
+          'Deleting it removes its registrations, bustouts, payouts and results for good.\n\nType DELETE to delete it.',
+      );
+      if (typed?.trim().toUpperCase() !== 'DELETE') return;
+    }
+    setListError('');
+    try {
+      await api.deleteTournament(t.id);
+      if (source === `c:${t.id}`) setSource('');
+      load();
+    } catch (err) {
+      setListError((err as Error).message);
+    }
+  };
+
   return (
     <>
     <main className="page">
@@ -95,10 +116,16 @@ export function Home() {
                 <a href={`/display/${t.id}`} target="_blank" rel="noreferrer">
                   Big screen
                 </a>
+                {isDirector && (
+                  <button className="link danger-link" onClick={() => remove(t)}>
+                    Delete
+                  </button>
+                )}
               </span>
             </li>
           ))}
         </ul>
+        {listError && <p className="error">{listError}</p>}
       </section>
 
       {isDirector && (

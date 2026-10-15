@@ -103,6 +103,8 @@ export const api = {
     seatsPerTable: number;
     money?: Partial<MoneyConfig>;
   }) => call<Tournament>('POST', '/api/tournaments', t),
+  deleteTournament: (id: number) => call<unknown>('DELETE', `/api/tournaments/${id}`),
+  finishTournament: (id: number, finished: boolean) => call<unknown>('POST', `/api/tournaments/${id}/finish`, { finished }),
   updateTournament: (id: number, patch: TournamentPatch) => call<unknown>('PATCH', `/api/tournaments/${id}`, patch),
   saveLevels: (id: number, levels: Level[], currentIndex: number, expectedIndex: number) =>
     call<unknown>('PUT', `/api/tournaments/${id}/levels`, { levels, currentIndex, expectedIndex }),

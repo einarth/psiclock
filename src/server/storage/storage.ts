@@ -69,6 +69,8 @@ export interface Storage {
   updateTournament(id: Id, patch: TournamentPatch): Promise<void>;
   /** Replaces the blind structure and moves the clock to match, in one write. */
   updateTournamentLevels(id: Id, levels: Level[], clock: ClockState): Promise<void>;
+  /** Removes the tournament with its entries and its action log. */
+  deleteTournament(id: Id): Promise<void>;
   /** Small named values kept by the server itself, such as when it was last seen running. */
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;

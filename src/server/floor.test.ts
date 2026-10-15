@@ -78,6 +78,30 @@ describe('floor actions', () => {
     expect(t.clock.running).toBe(false);
   });
 
+  it('ends a running tournament with players left for a deal, and reopens it', async () => {
+    expect((await post(`/api/tournaments/${tid}/finish`, { finished: true })).status).toBe(400);
+    await post(`/api/tournaments/${tid}/clock`, { type: 'clock.start' });
+    expect((await post(`/api/tournaments/${tid}/finish`, { finished: true })).body).toEqual({ finished: true, playersLeft: 5 });
+    let t = (await storage.getTournament(tid))!;
+    expect([t.status, t.clock.running]).toEqual(['finished', false]);
+    expect((await post(`/api/tournaments/${tid}/clock`, { type: 'clock.start' })).status).toBe(400);
+    const [a] = await entries();
+    expect((await post(`/api/tournaments/${tid}/entries/${a.id}/bust`)).status).toBe(400);
+    await post(`/api/tournaments/${tid}/finish`, { finished: false });
+    t = (await storage.getTournament(tid))!;
+    expect([t.status, t.clock.running]).toEqual(['running', false]);
+  });
+
+  it('deletes a tournament with its entries and log', async () => {
+    const floor = await signedIn(storage, 'floor');
+    const del = (cookie: string) => app.inject({ method: 'DELETE', url: `/api/tournaments/${tid}`, headers: { cookie } });
+    expect((await del(floor)).statusCode).toBe(403);
+    expect((await del(cookie)).statusCode).toBe(204);
+    expect(await storage.getTournament(tid)).toBeNull();
+    expect(await storage.listEntries(tid)).toEqual([]);
+    expect((await del(cookie)).statusCode).toBe(404);
+  });
+
   it('moves a player to a chosen table and rejects a taken seat', async () => {
     const list = await entries();
     // Move from the full table (3 players) to the short one (2 players).
