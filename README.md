@@ -1,9 +1,8 @@
 # PSICLOCK
 
-Poker tournament clock and management for the Icelandic Poker Federation, built as a
-replacement for Tournament Director. It runs as a small web server on the venue laptop;
-every other device (floor phones, desk tablet, the big-screen TV) just opens it in a browser
-on the same network.
+Poker tournament clock and management for PSÍ, the Icelandic Poker Federation. 
+Meant to run as a small web server on any computer at the venue; every other device (floor 
+phones, desk tablet, the big-screen TV) just opens it in a browser on the same network.
 
 ## Requirements
 

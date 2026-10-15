@@ -21,6 +21,7 @@
     "@fastify/static": "^10.1.5",
     "@fastify/websocket": "^11.3.3",
     "fastify": "^5.12.5",
+    "node": "^22.23.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
