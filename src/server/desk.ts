@@ -35,6 +35,14 @@ export function validLevels(levels: unknown): levels is Level[] {
   );
 }
 
+/** A planned start time as an ISO string, null for none, or undefined when it is not a date. */
+export function startTime(v: unknown): string | null | undefined {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string') return undefined;
+  const ms = Date.parse(v);
+  return Number.isNaN(ms) ? undefined : new Date(ms).toISOString();
+}
+
 function validPayouts(p: unknown): p is number[] | null {
   if (p === null) return true;
   if (!Array.isArray(p) || p.length === 0) return false;
@@ -73,6 +81,17 @@ export function registerDeskRoutes(app: FastifyInstance, storage: Storage, run: 
       if (b.payouts !== undefined) {
         if (!validPayouts(b.payouts)) throw new ActionError('payout percentages must be positive and add up to 100');
         patch.payouts = b.payouts;
+      }
+      if (b.startsAt !== undefined) {
+        const startsAt = startTime(b.startsAt);
+        if (startsAt === undefined) throw new ActionError('the start time is not a valid date and time');
+        patch.startsAt = startsAt;
+      }
+      if (b.prizePoolOverride !== undefined) {
+        if (b.prizePoolOverride !== null && !isCount(b.prizePoolOverride)) {
+          throw new ActionError('the prize pool must be a whole number of 0 or more');
+        }
+        patch.prizePoolOverride = b.prizePoolOverride;
       }
       await storage.updateTournament(Number(req.params.id), patch);
       return { result: patch, payload: patch };

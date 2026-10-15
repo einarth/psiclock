@@ -28,6 +28,8 @@ const tournament = (over: Partial<Tournament> = {}): Tournament => ({
   payouts: null,
   layoutId: null,
   screen: defaultScreen,
+  startsAt: null,
+  prizePoolOverride: null,
   createdAt: '',
   ...over,
 });
@@ -59,6 +61,12 @@ describe('money', () => {
   it('pays at least the guarantee', () => {
     const t = tournament({ money: { ...defaultMoney, guarantee: 1_000_000 } });
     expect(moneySummary(t, [entry(1)]).prizePool).toBe(1_000_000);
+  });
+
+  it('pays a prize pool set by hand instead of what was paid in', () => {
+    const s = moneySummary(tournament({ prizePoolOverride: 50_000 }), [entry(1), entry(2), entry(3)]);
+    expect(s).toMatchObject({ collectedPool: 60000, automaticPool: 60000, prizePool: 50_000, poolSource: 'set' });
+    expect(moneySummary(tournament({ money: { ...defaultMoney, guarantee: 1_000_000 } }), [entry(1)]).poolSource).toBe('guarantee');
   });
 
   it('pays about 15% of the field', () => {

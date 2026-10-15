@@ -123,6 +123,20 @@ describe('desk and money', () => {
     expect((await call('PATCH', `/api/tournaments/${tid}`, { money: { bogus: 1 } })).status).toBe(400);
   });
 
+  it('sets the start time and a hand-set prize pool, and clears them again', async () => {
+    const patch = (body: object) => call('PATCH', `/api/tournaments/${tid}`, body);
+    expect((await patch({ startsAt: 'tomorrow-ish' })).status).toBe(400);
+    expect((await patch({ startsAt: '2026-10-18T19:00:00.000Z', prizePoolOverride: 1_000_000 })).status).toBe(200);
+    let t = (await storage.getTournament(tid))!;
+    expect(t.startsAt).toBe('2026-10-18T19:00:00.000Z');
+    expect(t.prizePoolOverride).toBe(1_000_000);
+    expect((await patch({ prizePoolOverride: -5 })).status).toBe(400);
+    expect((await patch({ prizePoolOverride: 1.5 })).status).toBe(400);
+    await patch({ startsAt: null, prizePoolOverride: null });
+    t = (await storage.getTournament(tid))!;
+    expect([t.startsAt, t.prizePoolOverride]).toEqual([null, null]);
+  });
+
   it('merges partly given money settings with the rest', async () => {
     expect((await call('PATCH', `/api/tournaments/${tid}`, { money: { guarantee: 500000 } })).status).toBe(200);
     expect((await storage.getTournament(tid))!.money).toEqual({ ...money, guarantee: 500000 });

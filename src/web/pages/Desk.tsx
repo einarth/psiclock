@@ -7,6 +7,7 @@ import type { Entry, Player } from '../../shared/types';
 import { num, ordinal } from '../format';
 import { useSession } from '../session';
 import { hasRole } from '../../shared/auth';
+import { toDraft, type Draft } from './Players';
 
 type Blocked = { text: string; retry: () => Promise<unknown> };
 
@@ -21,6 +22,8 @@ export function Desk({ id }: { id: number }) {
   const [last, setLast] = useState<{ entry: Entry; collect: number; what: string } | null>(null);
   const [blocked, setBlocked] = useState<Blocked | null>(null);
   const [error, setError] = useState('');
+  // The entry whose player details are open for editing.
+  const [editing, setEditing] = useState<number | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => api.players(search).then(setPlayers), 150);
@@ -106,10 +109,10 @@ export function Desk({ id }: { id: number }) {
   return (
     <main className="page">
       <header className="page-head">
-        <h1>{t.name}: desk</h1>
+        <h1>{t.name}: registrations</h1>
         <nav>
           <a href="/">Home</a>
-          {hasRole(me?.user, 'director') && <a href={`/director/${id}`}>Director</a>}
+          {hasRole(me?.user, 'director') && <a href={`/director/${id}`}>Manage</a>}
           <a href={`/floor/${id}`}>Floor</a>
           <a href={`/api/tournaments/${id}/results.csv`}>Results (CSV)</a>
         </nav>
@@ -127,6 +130,11 @@ export function Desk({ id }: { id: number }) {
             <div className="collect">
               Collect <b>{num(last.collect)}</b>
             </div>
+          )}
+          {editing !== last.entry.id && (
+            <button className="link" onClick={() => setEditing(last.entry.id)}>
+              Add {last.entry.playerName}'s details
+            </button>
           )}
         </section>
       )}
@@ -175,7 +183,6 @@ export function Desk({ id }: { id: number }) {
         )}
         <p className="muted small">
           Buy-in {num(t.buyIn)}
-          {t.fee ? ` + ${num(t.fee)} fee` : ''}
           {m.allowRebuys && `, rebuy ${num(m.rebuyPrice + m.rebuyFee)}`}
           {m.allowAddOn && `, add-on ${num(m.addOnPrice + m.addOnFee)}`}
         </p>
@@ -198,11 +205,14 @@ export function Desk({ id }: { id: number }) {
           </span>
           <span>
             Prize pool <b>{num(summary.prizePool)}</b>
-            {summary.prizePool > summary.collectedPool && ' (guarantee)'}
+            {summary.poolSource === 'guarantee' && ' (guarantee)'}
+            {summary.poolSource === 'set' && ' (set by hand)'}
           </span>
-          <span>
-            Fees <b>{num(summary.fees)}</b>
-          </span>
+          {summary.fees > 0 && (
+            <span>
+              Fees <b>{num(summary.fees)}</b>
+            </span>
+          )}
           <span>
             Places paid <b>{prizes.filter((p) => p > 0).length}</b>
           </span>
@@ -248,10 +258,12 @@ export function Desk({ id }: { id: number }) {
           {shown.slice(0, 50).map((e) => {
             const alive = isAlive(e);
             const place = finishingPlace(entries, e);
-            return (
+            const row = (
               <li key={e.id}>
                 <span>
-                  {e.playerName}{' '}
+                  <span className="player-name" title="Double-click to edit details" onDoubleClick={() => setEditing(e.id)}>
+                    {e.playerName}
+                  </span>{' '}
                   <span className="muted small">
                     {alive ? `Table ${e.table}, seat ${e.seat}` : `Out ${place ? ordinal(place) : ''}`}
                     {e.rebuys > 0 && `, ${e.rebuys} rebuy${e.rebuys > 1 ? 's' : ''}`}
@@ -259,6 +271,9 @@ export function Desk({ id }: { id: number }) {
                   </span>
                 </span>
                 <span className="row-actions">
+                  <button className="link" onClick={() => setEditing(editing === e.id ? null : e.id)}>
+                    Edit
+                  </button>
                   {m.allowRebuys && (
                     <button onClick={() => rebuy(e)} className={rebuyOpen ? '' : 'muted'}>
                       Rebuy
@@ -280,10 +295,64 @@ export function Desk({ id }: { id: number }) {
                 </span>
               </li>
             );
+            return editing === e.id ? [row, <PlayerDetails key={`edit-${e.id}`} playerId={e.playerId} onClose={() => setEditing(null)} />] : row;
           })}
         </ul>
         {shown.length > 50 && <p className="muted small">Showing 50 of {shown.length}. Type in the filter to find others.</p>}
       </section>
     </main>
+  );
+}
+
+/** Name, full name, email and phone of a player who was registered with just a name. */
+function PlayerDetails({ playerId, onClose }: { playerId: number; onClose: () => void }) {
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.player(playerId).then((p) => setDraft(toDraft(p)), (err) => setError((err as Error).message));
+  }, [playerId]);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!draft) return;
+    setError('');
+    try {
+      await api.updatePlayer(playerId, draft);
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const field = (key: keyof Draft, label: string, type = 'text') => (
+    <label>
+      {label}
+      <input
+        type={type}
+        required={key === 'name'}
+        autoFocus={key === 'fullName'}
+        value={draft![key]}
+        onChange={(e) => setDraft({ ...draft!, [key]: e.target.value })}
+      />
+    </label>
+  );
+
+  if (!draft) return <li className="edit-row muted">{error || 'Loading...'}</li>;
+  return (
+    <li className="edit-row">
+      <form className="grid-form" onSubmit={save} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+        {field('name', 'Name (shown on screens)')}
+        {field('fullName', 'Full name')}
+        {field('email', 'Email', 'email')}
+        {field('phone', 'Phone', 'tel')}
+        <button type="submit" className="primary">
+          Save details
+        </button>
+        <button type="button" className="link" onClick={onClose}>
+          Cancel
+        </button>
+        {error && <p className="error">{error}</p>}
+      </form>
+    </li>
   );
 }

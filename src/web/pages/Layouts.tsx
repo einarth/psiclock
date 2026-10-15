@@ -60,6 +60,8 @@ function demoTournament(): { t: Tournament; entries: Entry[] } {
     payouts: null,
     layoutId: null,
     screen: defaultScreen,
+    startsAt: null,
+    prizePoolOverride: null,
     createdAt: '',
   };
   const names = ['Anna', 'Bjarni', 'Dagur', 'Edda', 'Fannar', 'Gunnar', 'Helga', 'Ingi', 'Jón', 'Kári', 'Lilja', 'Magnús'];

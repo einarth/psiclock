@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import type { BlindStructure, TemplateConfig, Tournament, TournamentTemplate } from '../../shared/types';
-import { num } from '../format';
+import { fromLocalInput, num, startText } from '../format';
 import { SessionFooter, signInUrl, useSession } from '../session';
 import { hasRole } from '../../shared/auth';
 
@@ -15,7 +15,7 @@ export function Home() {
   const [templates, setTemplates] = useState<TournamentTemplate[]>([]);
   // "" = blank, "t:<id>" = a saved template, "c:<id>" = a copy of an earlier tournament.
   const [source, setSource] = useState('');
-  const [form, setForm] = useState({ name: '', buyIn: 0, fee: 0, startingStack: 30000, structureId: 0, theme: 'slate', tableCount: 10, seatsPerTable: 9 });
+  const [form, setForm] = useState({ name: '', startsAt: '', buyIn: 0, startingStack: 30000, structureId: 0, theme: 'slate', tableCount: 10, seatsPerTable: 9 });
   const isDirector = hasRole(user, 'director');
 
   const load = () => {
@@ -42,8 +42,8 @@ export function Home() {
     setSource(value);
     const c = sourceConfig(value);
     if (c) {
-      const { buyIn, fee, startingStack, tableCount, seatsPerTable } = c;
-      setForm((f) => ({ ...f, buyIn, fee, startingStack, tableCount, seatsPerTable }));
+      const { buyIn, startingStack, tableCount, seatsPerTable } = c;
+      setForm((f) => ({ ...f, buyIn, startingStack, tableCount, seatsPerTable }));
     }
   };
 
@@ -54,10 +54,11 @@ export function Home() {
       const id = Number(source.slice(2));
       await api.createTournament({
         ...form,
+        startsAt: fromLocalInput(form.startsAt),
         templateId: source.startsWith('t:') ? id : undefined,
         fromTournamentId: source.startsWith('c:') ? id : undefined,
       });
-      setForm((f) => ({ ...f, name: '' }));
+      setForm((f) => ({ ...f, name: '', startsAt: '' }));
       load();
     } catch (err) {
       setError((err as Error).message);
@@ -85,10 +86,11 @@ export function Home() {
             <li key={t.id}>
               <span>
                 <strong>{t.name}</strong> <span className={`badge badge-${t.status}`}>{t.status}</span>
+                {t.status === 'setup' && t.startsAt && <span className="muted small"> starts {startText(t.startsAt)}</span>}
               </span>
               <span className="actions">
                 {hasRole(user, 'director') && <a href={`/director/${t.id}`}>Manage</a>}
-                {hasRole(user, 'desk') && <a href={`/desk/${t.id}`}>Desk</a>}
+                {hasRole(user, 'desk') && <a href={`/desk/${t.id}`}>Registrations</a>}
                 {hasRole(user, 'floor') && <a href={`/floor/${t.id}`}>Floor</a>}
                 <a href={`/display/${t.id}`} target="_blank" rel="noreferrer">
                   Big screen
@@ -132,12 +134,12 @@ export function Home() {
             <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </label>
           <label>
-            Buy-in
-            <input type="number" min={0} value={form.buyIn} onChange={(e) => setForm({ ...form, buyIn: +e.target.value })} />
+            Starts at
+            <input type="datetime-local" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} />
           </label>
           <label>
-            Fee
-            <input type="number" min={0} value={form.fee} onChange={(e) => setForm({ ...form, fee: +e.target.value })} />
+            Buy-in
+            <input type="number" min={0} value={form.buyIn} onChange={(e) => setForm({ ...form, buyIn: +e.target.value })} />
           </label>
           <label>
             Starting stack

@@ -33,7 +33,7 @@ export function SaveTemplate({ t }: { t: Tournament }) {
     <section className="card">
       <h2>Save as template</h2>
       <p className="muted small">
-        Keeps the buy-in, fee, starting stack, blind levels, tables, rebuy and late-registration settings, payout table and
+        Keeps the buy-in, starting stack, blind levels, tables, rebuy and late-registration settings, payout table and
         screen layout. Players and the clock are not saved.
       </p>
       <form className="form-actions" onSubmit={save}>

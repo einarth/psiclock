@@ -36,7 +36,7 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
   );
 
   app.post<{ Params: PE }>('/api/tournaments/:id/entries/:entryId/bust', (req, reply) =>
-    run(reply, Number(req.params.id), 'entry.bust', 'floor', async ({ entries, entry }) => {
+    run(reply, Number(req.params.id), 'entry.bust', 'floor', async ({ t, entries, entry }) => {
       const e = entry(req.params.entryId);
       if (!isAlive(e)) throw new ActionError(`${e.playerName} is already out`);
       if (entries.filter(isAlive).length === 1) throw new ActionError(`${e.playerName} is the last player left`);
@@ -45,7 +45,12 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
       await storage.updateEntry(e.id, { table: e.table, seat: e.seat, bustSeq });
       const after = entries.map((x) => (x.id === e.id ? { ...x, bustSeq } : x));
       const place = finishingPlace(after, { ...e, bustSeq });
-      return { result: { place }, payload: { entryId: e.id, table: e.table, seat: e.seat, place } };
+      // One player left: the tournament is over. The clock stops where it is.
+      const finished = after.filter(isAlive).length === 1;
+      if (finished) {
+        await storage.updateTournamentClock(t.id, applyClockCommand(t.levels, t.clock, { type: 'clock.pause' }, Date.now()), 'finished');
+      }
+      return { result: { place, finished }, payload: { entryId: e.id, table: e.table, seat: e.seat, place, finished } };
     }),
   );
 
@@ -58,6 +63,8 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
       const seat = sameSeatFree ? { table: e.table!, seat: e.seat! } : seatForNewPlayer(t.tables, entries, rand);
       if (!seat) throw new ActionError('no free seat to put the player back in');
       await storage.updateEntry(e.id, { ...seat, bustSeq: null });
+      // Undoing the bust that left a winner reopens the tournament, with the clock still paused.
+      if (t.status === 'finished' && entries.filter(isAlive).length === 1) await storage.updateTournament(t.id, { status: 'running' });
       return { result: seat, payload: { entryId: e.id, ...seat } };
     }),
   );

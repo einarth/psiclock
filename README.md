@@ -29,6 +29,15 @@ Anyone on the network can open the big screens without a login; everything else 
 On Windows the first start may ask to allow Node.js through the firewall; allow it on
 private networks so other devices can connect.
 
+## Power cuts and backups
+
+The database is written to disk on every change, so a power cut or a crash loses at most the
+click that was being made. When PSICLOCK starts again, any clock that was running is paused
+where it stood when the server went down; check the level time and press Resume on Manage.
+It also copies the database into a `backups` folder next to it when it starts and every
+10 minutes while a tournament is running (`psiclock-YYYYMMDD-HHMMSS.db`, the newest 30 are
+kept). To go back to a copy, stop PSICLOCK and put the copy in place of the `.db` file.
+
 ## Packaging as one .exe
 
 ```
@@ -65,8 +74,8 @@ npm run typecheck
 | --- | --- | --- |
 | `/` | Anyone | List tournaments; staff see their links, directors can create tournaments |
 | `/login` | Staff | Sign in; on a fresh install, create the first (admin) login from the laptop |
-| `/director/:id` | Director | Run the clock; buy-in, rebuy, add-on, late registration and guarantee settings; payout table (automatic about 15% paid, or edit the percentages by hand) |
-| `/desk/:id` | Desk | Register and seat players, take rebuys and add-ons (shows the amount to collect), prize pool summary, mark prizes paid, results as CSV |
+| `/director/:id` | Director | Manage: run the clock and set the planned start time; buy-in, rebuy, add-on, late registration and guarantee settings; payout table (automatic about 15% paid, or edit the percentages by hand) and prize pool (what was paid in, or set by hand) |
+| `/desk/:id` | Desk | Registrations: register and seat players, fill in their details later (double-click a name), take rebuys and add-ons (shows the amount to collect), prize pool summary, mark prizes paid, results as CSV |
 | `/floor/:id` | Floor staff | Phone or tablet view: bust players (with undo), move players, balance and break tables, redraw seats, hand-for-hand |
 | `/display/:id` | Big screen (no login) | Whatever the director puts on the screens: the clock layout, seating, player moves, payouts or a message. Click once for full screen and sound. `?scene=payouts` pins a TV to one scene, `?theme=midnight` overrides the theme |
 | `/payouts/:id` | Second screen (no login) | The big screen pinned to the payout table |

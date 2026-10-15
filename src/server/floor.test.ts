@@ -61,6 +61,23 @@ describe('floor actions', () => {
     expect(actions.map((x: { type: string }) => x.type)).toContain('entry.restore');
   });
 
+  it('finishes the tournament and stops the clock when one player is left', async () => {
+    await post(`/api/tournaments/${tid}/clock`, { type: 'clock.start' });
+    const list = await entries();
+    for (const e of list.slice(0, 3)) expect((await post(`/api/tournaments/${tid}/entries/${e.id}/bust`)).body.finished).toBe(false);
+    const last = await post(`/api/tournaments/${tid}/entries/${list[3].id}/bust`);
+    expect(last.body).toEqual({ place: 2, finished: true });
+    let t = (await storage.getTournament(tid))!;
+    expect(t.status).toBe('finished');
+    expect(t.clock.running).toBe(false);
+    expect((await post(`/api/tournaments/${tid}/entries/${list[4].id}/bust`)).status).toBe(400);
+    // Undoing that bust reopens it; the clock waits for the director.
+    await post(`/api/tournaments/${tid}/entries/${list[3].id}/restore`);
+    t = (await storage.getTournament(tid))!;
+    expect(t.status).toBe('running');
+    expect(t.clock.running).toBe(false);
+  });
+
   it('moves a player to a chosen table and rejects a taken seat', async () => {
     const list = await entries();
     // Move from the full table (3 players) to the short one (2 players).

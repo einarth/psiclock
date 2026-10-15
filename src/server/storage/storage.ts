@@ -69,6 +69,11 @@ export interface Storage {
   updateTournament(id: Id, patch: TournamentPatch): Promise<void>;
   /** Replaces the blind structure and moves the clock to match, in one write. */
   updateTournamentLevels(id: Id, levels: Level[], clock: ClockState): Promise<void>;
+  /** Small named values kept by the server itself, such as when it was last seen running. */
+  getMeta(key: string): Promise<string | null>;
+  setMeta(key: string, value: string): Promise<void>;
+  /** Writes a complete copy of the database to a new file. */
+  backupTo(file: string): Promise<void>;
 
   /** Entries with the player's name filled in. */
   listEntries(tournamentId: Id): Promise<Entry[]>;

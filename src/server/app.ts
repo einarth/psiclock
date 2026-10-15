@@ -6,7 +6,7 @@ import { extname } from 'node:path';
 import type { Storage } from './storage/storage.js';
 import { Hub } from './hub.js';
 import { registerFloorRoutes } from './floor.js';
-import { registerDeskRoutes, validLevels, validMoney } from './desk.js';
+import { registerDeskRoutes, startTime, validLevels, validMoney } from './desk.js';
 import { createActionRunner } from './actions.js';
 import { actorOf, registerAuth } from './auth.js';
 import { MOVE_TYPES, layoutFor, movesFrom, registerScreenRoutes } from './screens.js';
@@ -80,6 +80,11 @@ export async function buildApp({ storage, webRoot, webFiles, logger = false, ran
   // Players
   app.get<{ Querystring: { search?: string } }>('/api/players', async (req) => storage.listPlayers(req.query.search));
 
+  app.get<{ Params: { id: string } }>('/api/players/:id', async (req, reply) => {
+    const player = await storage.getPlayer(Number(req.params.id));
+    return player ?? reply.code(404).send({ error: 'player not found' });
+  });
+
   app.post<{ Body: NewPlayer }>('/api/players', async (req, reply) => {
     if (!req.body?.name?.trim()) return reply.code(400).send({ error: 'name is required' });
     const player = await storage.createPlayer(req.body);
@@ -94,6 +99,8 @@ export async function buildApp({ storage, webRoot, webFiles, logger = false, ran
     const player = await storage.updatePlayer(Number(req.params.id), req.body ?? {});
     if (!player) return reply.code(404).send({ error: 'player not found' });
     await storage.appendAction({ tournamentId: null, type: 'player.update', payload: player, actor: actorOf(req, 'desk') });
+    // A new name shows on the screens straight away.
+    if (req.body?.name !== undefined) await publishAll();
     return player;
   });
 
@@ -129,6 +136,8 @@ export async function buildApp({ storage, webRoot, webFiles, logger = false, ran
       tableCount?: number;
       seatsPerTable?: number;
       money?: MoneyConfig;
+      /** When play is planned to start, as an ISO time. */
+      startsAt?: string | null;
     };
   }>('/api/tournaments', async (req, reply) => {
     const b = req.body ?? {};
@@ -144,6 +153,8 @@ export async function buildApp({ storage, webRoot, webFiles, logger = false, ran
     if (b.money !== undefined && !validMoney(b.money)) {
       return reply.code(400).send({ error: 'money settings must all be whole numbers of 0 or more' });
     }
+    const startsAt = startTime(b.startsAt);
+    if (startsAt === undefined) return reply.code(400).send({ error: 'the start time is not a valid date and time' });
     const tableCount = Number(b.tableCount ?? 0);
     const seatsPerTable = Number(b.seatsPerTable ?? 9);
     if (!(tableCount >= 0 && tableCount <= 50 && seatsPerTable >= 2 && seatsPerTable <= 12)) {
@@ -166,6 +177,7 @@ export async function buildApp({ storage, webRoot, webFiles, logger = false, ran
         money: b.money ?? template?.money,
         payouts: template?.payouts ?? null,
         layoutId,
+        startsAt,
       },
       initialClock(Date.now()),
     );

@@ -118,6 +118,9 @@ const migrations: string[] = [
      config TEXT NOT NULL,
      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
    );`,
+  `ALTER TABLE tournaments ADD COLUMN starts_at TEXT;
+   ALTER TABLE tournaments ADD COLUMN prize_pool INTEGER;
+   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`,
 ];
 
 /** How each patchable field is stored: column name and conversion to a SQLite value. */
@@ -133,6 +136,9 @@ const tournamentColumns: Record<keyof TournamentPatch, Column> = {
   handForHand: ['hand_for_hand', (v: boolean) => (v ? 1 : 0)],
   money: ['money', json],
   payouts: ['payouts', json],
+  startsAt: ['starts_at', (v: string | null) => v],
+  prizePoolOverride: ['prize_pool', (v: number | null) => v],
+  status: ['status', (v: string) => v],
   layoutId: ['layout_id', (v: number | null) => v],
   screen: ['screen', json],
 };
@@ -192,6 +198,8 @@ const toTournament = (r: Row): Tournament => ({
   payouts: r.payouts == null ? null : JSON.parse(String(r.payouts)),
   layoutId: r.layout_id == null ? null : Number(r.layout_id),
   screen: { ...defaultScreen, ...JSON.parse(String(r.screen)) },
+  startsAt: r.starts_at == null ? null : String(r.starts_at),
+  prizePoolOverride: r.prize_pool == null ? null : Number(r.prize_pool),
   createdAt: String(r.created_at),
 });
 
@@ -258,7 +266,8 @@ export class SqliteStorage implements Storage {
   async init() {
     if (this.file !== ':memory:') mkdirSync(dirname(this.file), { recursive: true });
     this.db = new DatabaseSync(this.file);
-    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+    // FULL makes every saved action survive a power cut, not just a crash of the program.
+    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON;');
     this.db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)');
     const row = this.db.prepare('SELECT MAX(version) AS v FROM schema_version').get() as Row;
     const current = row.v == null ? 0 : Number(row.v);
@@ -277,6 +286,20 @@ export class SqliteStorage implements Storage {
 
   async close() {
     this.db.close();
+  }
+
+  async getMeta(key: string) {
+    const r = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as Row | undefined;
+    return r ? String(r.value) : null;
+  }
+
+  async setMeta(key: string, value: string) {
+    this.db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+  }
+
+  async backupTo(file: string) {
+    // A consistent copy even while the server is writing; the file must not exist yet.
+    this.db.prepare('VACUUM INTO ?').run(file);
   }
 
   private inTransaction = false;
@@ -356,8 +379,8 @@ export class SqliteStorage implements Storage {
   async createTournament(t: NewTournament, clock: ClockState) {
     const r = this.db
       .prepare(
-        `INSERT INTO tournaments (name, buy_in, fee, starting_stack, levels, clock, theme, tables, money, payouts, layout_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+        `INSERT INTO tournaments (name, buy_in, fee, starting_stack, levels, clock, theme, tables, money, payouts, layout_id, starts_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
       )
       .get(
         t.name,
@@ -371,6 +394,7 @@ export class SqliteStorage implements Storage {
         JSON.stringify(normalizeMoney(t.money)),
         t.payouts ? JSON.stringify(t.payouts) : null,
         t.layoutId ?? null,
+        t.startsAt ?? null,
       ) as Row;
     return toTournament(r);
   }

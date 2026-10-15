@@ -38,8 +38,12 @@ export interface MoneySummary {
   collectedPool: number;
   /** Fees kept by the organiser. */
   fees: number;
-  /** The pool that is paid out: collected or the guarantee, whichever is larger. */
+  /** The pool that is paid out: set by hand, or else collected or the guarantee, whichever is larger. */
   prizePool: number;
+  /** The pool without a hand-set amount: collected or the guarantee, whichever is larger. */
+  automaticPool: number;
+  /** Where the prize pool comes from. */
+  poolSource: 'collected' | 'guarantee' | 'set';
   totalChips: number;
 }
 
@@ -48,13 +52,16 @@ export function moneySummary(t: Tournament, entries: Entry[]): MoneySummary {
   const rebuys = entries.reduce((n, e) => n + e.rebuys, 0);
   const addOns = entries.filter((e) => e.addOn).length;
   const collectedPool = entries.length * t.buyIn + rebuys * m.rebuyPrice + addOns * m.addOnPrice;
+  const automaticPool = Math.max(collectedPool, m.guarantee);
   return {
     entries: entries.length,
     rebuys,
     addOns,
     collectedPool,
     fees: entries.length * t.fee + rebuys * m.rebuyFee + addOns * m.addOnFee,
-    prizePool: Math.max(collectedPool, m.guarantee),
+    prizePool: t.prizePoolOverride ?? automaticPool,
+    automaticPool,
+    poolSource: t.prizePoolOverride !== null ? 'set' : automaticPool > collectedPool ? 'guarantee' : 'collected',
     totalChips: entries.length * t.startingStack + rebuys * m.rebuyChips + addOns * m.addOnChips,
   };
 }

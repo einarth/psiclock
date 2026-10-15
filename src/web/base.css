@@ -57,6 +57,8 @@ tr.past { color: var(--muted); }
 .control-clock { font-size: clamp(3rem, 15vw, 6rem); font-variant-numeric: tabular-nums; font-weight: 700; }
 .control-level { font-size: 1.2rem; margin-bottom: 16px; }
 .control-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.control-start { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin-bottom: 16px; }
+.control-winner { text-align: center; font-size: 1.1rem; margin: 0 0 16px; }
 
 /* Big screen: layout only. Colours and fonts come from the theme files via these variables.
    Sizes use container units (cqh, cqw) so a screen scales to its box: the TV or the editor preview.
@@ -121,6 +123,7 @@ tr.past { color: var(--muted); }
 .w-row .num { color: var(--d-muted); font-size: 0.8em; }
 .w-row .acc { color: var(--d-accent); }
 .w-row .end { text-align: right; font-size: 0.8em; }
+.w-row .end.prize { font-size: 1em; }
 .w-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .w-prize { color: var(--d-accent); }
 
@@ -131,6 +134,7 @@ tr.past { color: var(--muted); }
 .main-body { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.5cqh; padding: 1cqh 3cqw; }
 .main-clock-box { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .main-clock { font-size: min(50cqh, 28cqw); line-height: 0.95; font-weight: 500; color: var(--d-accent); font-variant-numeric: tabular-nums; }
+.main-clock.long { font-size: min(36cqh, 17cqw); }
 .main-clock.low { color: var(--d-warning); }
 .main-clock.paused { opacity: 0.5; }
 .main-paused { font-size: min(5cqh, 3.5cqw); color: var(--d-warning); text-transform: uppercase; letter-spacing: 0.25em; }
@@ -155,6 +159,16 @@ tr.past { color: var(--muted); }
 .scene-row { display: flex; justify-content: space-between; gap: 1cqw; padding: 0.15em 0.6em; }
 .scene-row.odd { background: var(--stripe); }
 .scene-seat { color: var(--d-accent); font-weight: 600; white-space: nowrap; }
+.winner-panel { align-items: center; justify-content: center; text-align: center; gap: 3cqh; }
+.winner-label { font-size: 4.5cqh; color: var(--d-muted); text-transform: uppercase; letter-spacing: 0.3em; }
+.winner-name { font-size: min(22cqh, calc(150cqw / var(--chars))); font-weight: 700; line-height: 1; }
+.winner-prize { font-size: 12cqh; color: var(--d-accent); font-variant-numeric: tabular-nums; font-weight: 500; }
+.winner-next { display: flex; gap: 0; margin-top: 3cqh; font-size: 3.6cqh; border-top: 1px solid var(--line); }
+.winner-next > div { padding: 1.6cqh 3cqw; }
+.winner-next > div + div { border-left: 1px solid var(--line); }
+.winner-next .num { color: var(--d-muted); }
+.winner-next .acc { color: var(--d-accent); font-variant-numeric: tabular-nums; }
+.main-starts { color: var(--d-muted); margin-bottom: 1cqh; }
 .scene-message { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 9cqh; font-weight: 700; white-space: pre-wrap; }
 .payout-board { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1cqh; }
 .payout-pool { font-size: 9cqh; font-weight: 500; color: var(--d-accent); }
@@ -289,3 +303,5 @@ a.button { display: inline-block; padding: 10px 14px; border: 1px solid var(--bo
 @media (max-width: 700px) {
   .layout-switch { grid-template-columns: 1fr; }
 }
+.list li.edit-row { display: block; background: var(--stripe, rgba(127, 127, 127, 0.06)); padding: 12px; }
+.player-name { cursor: default; user-select: none; }

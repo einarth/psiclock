@@ -85,6 +85,7 @@ export const api = {
   setScreen: (id: number, s: { scene?: ScreenState['scene']; seconds?: number; message?: string; autoMoves?: boolean }) =>
     call<ScreenState>('POST', `/api/tournaments/${id}/screen`, s),
   players: (search = '') => call<Player[]>('GET', `/api/players?search=${encodeURIComponent(search)}`),
+  player: (id: number) => call<Player>('GET', `/api/players/${id}`),
   createPlayer: (p: NewPlayer) => call<Player>('POST', '/api/players', p),
   updatePlayer: (id: number, p: Partial<NewPlayer>) => call<Player>('PATCH', `/api/players/${id}`, p),
   structures: () => call<BlindStructure[]>('GET', '/api/structures'),
@@ -92,9 +93,9 @@ export const api = {
   createTournament: (t: {
     name: string;
     buyIn: number;
-    fee: number;
     startingStack: number;
     structureId: number;
+    startsAt: string | null;
     templateId?: number;
     fromTournamentId?: number;
     theme: string;

@@ -27,12 +27,20 @@ function derive(p: ScreenProps) {
     const place = finishingPlace(p.entries, e);
     if (place) placed.set(place, e);
   }
+  const alive = p.entries.filter(isAlive);
+  // One player left in a finished tournament has won it.
+  const winner = p.t.status === 'finished' && alive.length === 1 ? alive[0] : null;
+  if (winner) placed.set(1, winner);
+  // Before the start, the time left until the planned start; null when there is none or it has passed.
+  const startsInMs = p.t.status === 'setup' && p.t.startsAt ? Date.parse(p.t.startsAt) - p.now : null;
   return {
     ...p,
     summary,
     prizes,
     placed,
-    remaining: p.entries.filter(isAlive).length,
+    winner,
+    startsInMs: startsInMs !== null && startsInMs > 0 ? startsInMs : null,
+    remaining: alive.length,
     isBreak: p.view.level?.kind === 'break',
     final: moneyFinal(p.t, p.view.levelNumber),
   };
@@ -82,7 +90,7 @@ export function ScreenView(props: ScreenProps) {
   return (
     <div className="screen" data-theme={props.layout.theme} style={themeStyle(props.layout)}>
       {bg && <img className="screen-bg" src={`/api/assets/${bg}`} alt="" />}
-      {props.scene === 'clock' ? <ClockScene d={d} /> : <OtherScene d={d} />}
+      {props.scene !== 'clock' ? <OtherScene d={d} /> : d.winner ? <WinnerScene d={d} winner={d.winner} /> : <ClockScene d={d} />}
     </div>
   );
 }
@@ -176,9 +184,17 @@ function MainPanel({ widgets, d }: { widgets: Widget[]; d: Data }) {
         </div>
       )}
       <div className="main-body">
-        {has('clock') && (
+        {has('clock') && d.startsInMs !== null && (
           <div className="main-clock-box">
-            <div className={`main-clock${low ? ' low' : ''}${view.running ? '' : ' paused'}`}>{formatClock(view.remainingMs)}</div>
+            <div className="main-paused main-starts">Starts in</div>
+            <div className={`main-clock${formatClock(d.startsInMs).length > 5 ? ' long' : ''}`}>{formatClock(d.startsInMs)}</div>
+          </div>
+        )}
+        {has('clock') && d.startsInMs === null && (
+          <div className="main-clock-box">
+            <div className={`main-clock${low ? ' low' : ''}${view.running ? '' : ' paused'}${formatClock(view.remainingMs).length > 5 ? ' long' : ''}`}>
+              {formatClock(view.remainingMs)}
+            </div>
             {!view.running && !view.finished && <div className="main-paused">{t.status === 'setup' ? 'Starting soon' : 'Paused'}</div>}
             {view.level && (
               <div className="main-progress">
@@ -243,6 +259,7 @@ function panelFor(w: Widget, d: Data): Panel | null {
     case 'level':
       return { label: 'Level', body: value(d.isBreak ? 'Break' : view.levelNumber) };
     case 'clock':
+      if (d.startsInMs !== null) return { label: 'Starts in', body: value(formatClock(d.startsInMs)) };
       return { label: d.isBreak ? 'Break ends in' : 'Level ends in', body: value(formatClock(view.remainingMs)) };
     case 'blinds':
       return { label: 'Blinds', body: blinds(view.level) };
@@ -329,7 +346,7 @@ function Bustouts({ d, count }: { d: Data; count: number }) {
           <div key={e.id} className="w-row">
             <span className="num">{ordinal(place)}</span>
             <span className="w-name">{e.playerName}</span>
-            <span className="end acc">{prize ? num(prize) : ''}</span>
+            <span className="end prize acc">{prize ? num(prize) : ''}</span>
           </div>
         );
       })}
@@ -351,6 +368,39 @@ function Structure({ d, count }: { d: Data; count: number }) {
           <span className="end acc">{l.minutes}'</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** The end of the tournament: the winner's name and prize, and who came next. */
+function WinnerScene({ d, winner }: { d: Data; winner: Entry }) {
+  const next = [2, 3, 4].flatMap((place) => {
+    const e = d.placed.get(place);
+    return e ? [{ place, e, prize: d.prizes[place - 1] }] : [];
+  });
+  return (
+    <div className="scene winner-scene">
+      <header className="panel scene-head">
+        <span className="scene-title">{d.t.name}</span>
+        <span className="scene-clock">Finished</span>
+      </header>
+      <div className="panel scene-panel winner-panel">
+        <div className="winner-label">Winner</div>
+        <div className="winner-name" style={{ '--chars': Math.max(8, winner.playerName.length) } as CSSProperties}>
+          {winner.playerName}
+        </div>
+        {d.prizes[0] > 0 && <div className="winner-prize">{num(d.prizes[0])}</div>}
+        {next.length > 0 && (
+          <div className="winner-next">
+            {next.map(({ place, e, prize }) => (
+              <div key={place}>
+                <span className="num">{ordinal(place)}</span> {e.playerName}
+                {prize ? <span className="acc"> {num(prize)}</span> : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

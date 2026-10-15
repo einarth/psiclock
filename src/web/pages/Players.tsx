@@ -2,9 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import type { Player } from '../../shared/types';
 
-type Draft = { name: string; fullName: string; email: string; phone: string };
+export type Draft = { name: string; fullName: string; email: string; phone: string };
 const empty: Draft = { name: '', fullName: '', email: '', phone: '' };
-const toDraft = (p: Player): Draft => ({
+export const toDraft = (p: Player): Draft => ({
   name: p.name,
   fullName: p.fullName ?? '',
   email: p.email ?? '',

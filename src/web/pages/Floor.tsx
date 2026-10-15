@@ -41,6 +41,7 @@ export function Floor({ id }: { id: number }) {
   if (!t || !view) return <main className="page">{connected ? 'Tournament not found.' : 'Connecting...'}</main>;
 
   const stats = fieldStats(entries, t.startingStack);
+  const prizes = payoutsFor(t, entries);
   const balance = nextBalanceMove(t.tables, entries);
   const breakable = tableToBreak(t.tables, entries);
   const open = openTables(t.tables);
@@ -64,9 +65,10 @@ export function Floor({ id }: { id: number }) {
     const place = entries.filter(isAlive).length;
     const prize = payoutsFor(t, entries)[place - 1] ?? 0;
     const money = prize > 0 ? ` and win ${num(prize)}` : '';
+    const winner = place === 2 ? entries.find((x) => isAlive(x) && x.id !== e.id) : undefined;
     setSheet({
       kind: 'confirm',
-      text: `Bust ${e.playerName} (table ${e.table}, seat ${e.seat})? They finish ${ordinal(place)}${money}.`,
+      text: `Bust ${e.playerName} (table ${e.table}, seat ${e.seat})? They finish ${ordinal(place)}${money}.${winner ? ` ${winner.playerName} wins the tournament and the clock stops.` : ''}`,
       danger: true,
       action: () =>
         act(
@@ -231,16 +233,20 @@ export function Floor({ id }: { id: number }) {
           <button onClick={() => act(() => api.addTable(id), 'Table added')}>Add table</button>
         </div>
         <ul className="list">
-          {busted.slice(0, 10).map((e) => (
-            <li key={e.id}>
-              <span>
-                {ordinal(finishingPlace(entries, e) ?? 0)} {e.playerName}
-              </span>
-              <button className="link" onClick={() => act(() => api.restore(id, e.id), `${e.playerName} back in`)}>
-                Undo bust
-              </button>
-            </li>
-          ))}
+          {busted.slice(0, 10).map((e) => {
+            const place = finishingPlace(entries, e) ?? 0;
+            return (
+              <li key={e.id}>
+                <span>
+                  {ordinal(place)} {e.playerName}
+                  {prizes[place - 1] > 0 && <span className="muted">, {num(prizes[place - 1])}</span>}
+                </span>
+                <button className="link" onClick={() => act(() => api.restore(id, e.id), `${e.playerName} back in`)}>
+                  Undo bust
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </section>
 

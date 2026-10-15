@@ -79,6 +79,7 @@ const access: Record<string, Role | 'public' | 'signedIn'> = {
   'POST /api/tournaments/:id/clock/run': 'floor',
 
   'GET /api/players': 'desk',
+  'GET /api/players/:id': 'desk',
   'POST /api/players': 'desk',
   'PATCH /api/players/:id': 'desk',
   'POST /api/tournaments/:id/entries': 'desk',

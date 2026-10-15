@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { api } from '../api';
 import { num } from '../format';
 import { moneySummary, payoutAmounts, payoutPercents, suggestedPercents, suggestedPlacesPaid } from '../../shared/money';
@@ -7,22 +7,19 @@ import type { Entry, MoneyConfig, Tournament } from '../../shared/types';
 type Field = { key: string; label: string; hint?: string };
 
 const basics: Field[] = [
-  { key: 'buyIn', label: 'Buy-in (prize pool)' },
-  { key: 'fee', label: 'Fee (kept)' },
+  { key: 'buyIn', label: 'Buy-in' },
   { key: 'startingStack', label: 'Starting stack' },
   { key: 'lateRegUntilLevel', label: 'Late registration until level', hint: '0 = no limit' },
   { key: 'guarantee', label: 'Guarantee', hint: '0 = none' },
   { key: 'rounding', label: 'Round prizes down to' },
 ];
 const rebuys: Field[] = [
-  { key: 'rebuyPrice', label: 'Rebuy price (prize pool)' },
-  { key: 'rebuyFee', label: 'Rebuy fee (kept)' },
+  { key: 'rebuyPrice', label: 'Rebuy price' },
   { key: 'rebuyChips', label: 'Rebuy chips' },
   { key: 'rebuyUntilLevel', label: 'Rebuys until level', hint: '0 = no limit' },
 ];
 const addOn: Field[] = [
-  { key: 'addOnPrice', label: 'Add-on price (prize pool)' },
-  { key: 'addOnFee', label: 'Add-on fee (kept)' },
+  { key: 'addOnPrice', label: 'Add-on price' },
   { key: 'addOnChips', label: 'Add-on chips' },
 ];
 const switches = ['allowRebuys', 'allowAddOn'] as const;
@@ -124,6 +121,9 @@ export function PayoutEditor({ t, entries }: { t: Tournament; entries: Entry[] }
   const live = payoutPercents(t, entries);
   const [draft, setDraft] = useState<string[] | null>(null);
   const [error, setError] = useState('');
+  // What is typed in Places paid and Prize pool; checked when the field is left or Enter is pressed.
+  const [placesText, setPlacesText] = useState<string | null>(null);
+  const [poolText, setPoolText] = useState<string | null>(null);
   const rows = draft ?? live.map(String);
   const percents = rows.map((r) => Number(r));
   const total = round1(percents.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0));
@@ -135,8 +135,33 @@ export function PayoutEditor({ t, entries }: { t: Tournament; entries: Entry[] }
     setDraft(next);
   };
   const setPlaces = (n: number) => {
-    if (n < 1 || n > Math.max(1, summary.entries)) return;
-    edit(suggestedPercents(n).map(String));
+    if (n !== rows.length) edit(suggestedPercents(n).map(String));
+  };
+  const commitPlaces = () => {
+    const typed = placesText?.trim() ?? '';
+    setPlacesText(null);
+    if (!/^\d+$/.test(typed)) return;
+    setPlaces(Math.min(Math.max(1, Number(typed)), Math.max(1, summary.entries)));
+  };
+  const savePool = async (prizePoolOverride: number | null) => {
+    setError('');
+    try {
+      await api.updateTournament(t.id, { prizePoolOverride });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+  const commitPool = () => {
+    const typed = (poolText ?? '').replace(/[\s.,]/g, '');
+    setPoolText(null);
+    if (poolText === null || !/^\d+$/.test(typed) || Number(typed) === summary.prizePool) return;
+    void savePool(Number(typed));
+  };
+  const onEnter = (commit: () => void) => (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    }
   };
   const save = async (payouts: number[] | null) => {
     setError('');
@@ -156,11 +181,31 @@ export function PayoutEditor({ t, entries }: { t: Tournament; entries: Entry[] }
           {t.payouts ? 'Your own table' : `Automatic, ${suggestedPlacesPaid(summary.entries)} of ${summary.entries} paid`}
         </span>
       </div>
+      <div className="form-actions">
+        <label className="inline">
+          Prize pool
+          <input
+            type="number"
+            min={0}
+            value={poolText ?? String(summary.prizePool)}
+            onChange={(e) => setPoolText(e.target.value)}
+            onBlur={commitPool}
+            onKeyDown={onEnter(commitPool)}
+            style={{ width: 140 }}
+          />
+        </label>
+        {summary.poolSource === 'set' ? (
+          <>
+            <span className="muted">Set by hand.</span>
+            <button type="button" onClick={() => savePool(null)}>
+              Use what was paid in ({num(summary.automaticPool)})
+            </button>
+          </>
+        ) : (
+          <span className="muted">{summary.poolSource === 'guarantee' ? 'The guarantee.' : 'What was paid in.'} Type a sum to set it by hand.</span>
+        )}
+      </div>
       <div className="money-line">
-        <span>
-          Prize pool <b>{num(summary.prizePool)}</b>
-          {summary.prizePool > summary.collectedPool && <span className="muted"> (guarantee)</span>}
-        </span>
         <span>
           Entries <b>{summary.entries}</b>
         </span>
@@ -170,9 +215,11 @@ export function PayoutEditor({ t, entries }: { t: Tournament; entries: Entry[] }
         <span>
           Add-ons <b>{summary.addOns}</b>
         </span>
-        <span>
-          Fees <b>{num(summary.fees)}</b>
-        </span>
+        {summary.fees > 0 && (
+          <span>
+            Fees <b>{num(summary.fees)}</b>
+          </span>
+        )}
       </div>
       <div className="form-actions">
         <label className="inline">
@@ -180,8 +227,10 @@ export function PayoutEditor({ t, entries }: { t: Tournament; entries: Entry[] }
           <input
             type="number"
             min={1}
-            value={rows.length}
-            onChange={(e) => setPlaces(Number(e.target.value))}
+            value={placesText ?? String(rows.length)}
+            onChange={(e) => setPlacesText(e.target.value)}
+            onBlur={commitPlaces}
+            onKeyDown={onEnter(commitPlaces)}
             style={{ width: 80 }}
           />
         </label>

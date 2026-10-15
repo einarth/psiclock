@@ -119,6 +119,10 @@ export interface Tournament {
   /** Saved big-screen layout; null = the built-in one. */
   layoutId: Id | null;
   screen: ScreenState;
+  /** When play is planned to start (ISO time); the big screen counts down to it. */
+  startsAt: string | null;
+  /** The prize pool set by hand; null = what the players paid in (or the guarantee, if larger). */
+  prizePoolOverride: number | null;
   createdAt: string;
 }
 
@@ -146,7 +150,7 @@ export interface Move {
 }
 
 export type NewTournament = Pick<Tournament, 'name' | 'buyIn' | 'fee' | 'startingStack' | 'levels'> &
-  Partial<Pick<Tournament, 'theme' | 'tables' | 'money' | 'payouts' | 'layoutId'>>;
+  Partial<Pick<Tournament, 'theme' | 'tables' | 'money' | 'payouts' | 'layoutId' | 'startsAt'>>;
 
 /** What a new tournament copies from a template: everything but the name, players and clock. */
 export interface TemplateConfig {
@@ -172,7 +176,20 @@ export interface TournamentTemplate extends TemplateConfig {
 export type TournamentPatch = Partial<
   Pick<
     Tournament,
-    'name' | 'buyIn' | 'fee' | 'startingStack' | 'theme' | 'tables' | 'handForHand' | 'money' | 'payouts' | 'layoutId' | 'screen'
+    | 'name'
+    | 'buyIn'
+    | 'fee'
+    | 'startingStack'
+    | 'theme'
+    | 'tables'
+    | 'handForHand'
+    | 'money'
+    | 'payouts'
+    | 'layoutId'
+    | 'screen'
+    | 'startsAt'
+    | 'prizePoolOverride'
+    | 'status'
   >
 >;
 
