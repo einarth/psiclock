@@ -9,7 +9,12 @@ phones, desk tablet, the big-screen TV) just opens it in a browser on the same n
 - Node.js 22.13 or newer (Node 24 LTS recommended). The database uses Node's built-in SQLite,
   so there is nothing native to compile.
 
-## Running at a venue
+## Download standalone exe file
+
+Download a .exe file from the 'Releases' section (to the right on github). 
+Double-click to run it.
+
+## Running from source
 
 ```
 npm install
