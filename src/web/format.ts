@@ -33,7 +33,7 @@ export function toLocalInput(iso: string | null): string {
 /** A datetime-local input's value as an ISO time; null when it is empty. */
 export const fromLocalInput = (v: string): string | null => (v ? new Date(v).toISOString() : null);
 
-/** A start time for people to read: "Sat 18 Oct, 19:00". */
+/** A date and time for people to read: "Sat 18 Oct, 19:00". */
 export function startText(iso: string): string {
   const d = new Date(iso);
   const day = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });

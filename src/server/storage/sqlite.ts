@@ -121,6 +121,19 @@ const migrations: string[] = [
   `ALTER TABLE tournaments ADD COLUMN starts_at TEXT;
    ALTER TABLE tournaments ADD COLUMN prize_pool INTEGER;
    CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`,
+  // When a tournament finished, kept by the database itself so every way of finishing it
+  // (last bust, a deal, the levels running out) records the time; reopening clears it.
+  `ALTER TABLE tournaments ADD COLUMN finished_at TEXT;
+   UPDATE tournaments SET finished_at = COALESCE(
+     (SELECT MAX(created_at) FROM action_log WHERE tournament_id = tournaments.id), created_at)
+   WHERE status = 'finished';
+   CREATE TRIGGER tournaments_finished_at AFTER UPDATE OF status ON tournaments
+   WHEN NEW.status IS NOT OLD.status
+   BEGIN
+     UPDATE tournaments
+     SET finished_at = CASE WHEN NEW.status = 'finished' THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') END
+     WHERE id = NEW.id;
+   END;`,
 ];
 
 /** How each patchable field is stored: column name and conversion to a SQLite value. */
@@ -200,6 +213,7 @@ const toTournament = (r: Row): Tournament => ({
   screen: { ...defaultScreen, ...JSON.parse(String(r.screen)) },
   startsAt: r.starts_at == null ? null : String(r.starts_at),
   prizePoolOverride: r.prize_pool == null ? null : Number(r.prize_pool),
+  finishedAt: r.finished_at == null ? null : String(r.finished_at),
   createdAt: String(r.created_at),
 });
 

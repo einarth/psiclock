@@ -30,6 +30,7 @@ const tournament = (over: Partial<Tournament> = {}): Tournament => ({
   screen: defaultScreen,
   startsAt: null,
   prizePoolOverride: null,
+  finishedAt: null,
   createdAt: '',
   ...over,
 });

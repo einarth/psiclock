@@ -123,6 +123,8 @@ export interface Tournament {
   startsAt: string | null;
   /** The prize pool set by hand; null = what the players paid in (or the guarantee, if larger). */
   prizePoolOverride: number | null;
+  /** When the tournament finished (ISO time); null while it has not. */
+  finishedAt: string | null;
   createdAt: string;
 }
 

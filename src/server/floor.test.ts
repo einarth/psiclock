@@ -70,12 +70,14 @@ describe('floor actions', () => {
     let t = (await storage.getTournament(tid))!;
     expect(t.status).toBe('finished');
     expect(t.clock.running).toBe(false);
+    expect(Date.now() - Date.parse(t.finishedAt!)).toBeLessThan(5000);
     expect((await post(`/api/tournaments/${tid}/entries/${list[4].id}/bust`)).status).toBe(400);
     // Undoing that bust reopens it; the clock waits for the director.
     await post(`/api/tournaments/${tid}/entries/${list[3].id}/restore`);
     t = (await storage.getTournament(tid))!;
     expect(t.status).toBe('running');
     expect(t.clock.running).toBe(false);
+    expect(t.finishedAt).toBeNull();
   });
 
   it('ends a running tournament with players left for a deal, and reopens it', async () => {
@@ -83,7 +85,7 @@ describe('floor actions', () => {
     await post(`/api/tournaments/${tid}/clock`, { type: 'clock.start' });
     expect((await post(`/api/tournaments/${tid}/finish`, { finished: true })).body).toEqual({ finished: true, playersLeft: 5 });
     let t = (await storage.getTournament(tid))!;
-    expect([t.status, t.clock.running]).toEqual(['finished', false]);
+    expect([t.status, t.clock.running, typeof t.finishedAt]).toEqual(['finished', false, 'string']);
     expect((await post(`/api/tournaments/${tid}/clock`, { type: 'clock.start' })).status).toBe(400);
     const [a] = await entries();
     expect((await post(`/api/tournaments/${tid}/entries/${a.id}/bust`)).status).toBe(400);

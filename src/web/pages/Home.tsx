@@ -108,6 +108,7 @@ export function Home() {
               <span>
                 <strong>{t.name}</strong> <span className={`badge badge-${t.status}`}>{t.status}</span>
                 {t.status === 'setup' && t.startsAt && <span className="muted small"> starts {startText(t.startsAt)}</span>}
+                {t.status === 'finished' && t.finishedAt && <span className="muted small"> finished {startText(t.finishedAt)}</span>}
               </span>
               <span className="actions">
                 {hasRole(user, 'director') && <a href={`/director/${t.id}`}>Manage</a>}
