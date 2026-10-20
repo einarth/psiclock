@@ -275,8 +275,21 @@ function panelFor(w: Widget, d: Data): Panel | null {
       return { label: 'Next level', body: blinds(view.nextLevel) };
     case 'players':
       return { label: 'Players', body: value(`${d.remaining} / ${d.entries.length}`) };
-    case 'avgStack':
-      return { label: 'Average stack', body: value(num(averageStack(t, d.entries))) };
+    case 'avgStack': {
+      const avg = averageStack(t, d.entries);
+      // In big blinds of the level being played, or of the next one during a break.
+      const play = view.level?.kind === 'level' ? view.level : view.nextLevel?.kind === 'level' ? view.nextLevel : null;
+      const bb = play && play.bigBlind > 0 && avg > 0 ? avg / play.bigBlind : null;
+      return {
+        label: 'Average stack',
+        body: (
+          <>
+            {value(num(avg))}
+            {bb !== null && <div className="panel-sub">{bb < 10 ? bb.toFixed(1) : Math.round(bb)} BB</div>}
+          </>
+        ),
+      };
+    }
     case 'chips':
       return { label: 'Chips in play', body: value(num(d.summary.totalChips)) };
     case 'prizePool':
