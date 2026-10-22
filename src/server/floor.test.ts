@@ -130,6 +130,22 @@ describe('floor actions', () => {
     expect(t!.tables.find((x) => x.number === 2)!.open).toBe(false);
   });
 
+  it('breaks a table into the seats the floor picked', async () => {
+    // Bust two players at table 1 so it has room for everyone at table 2.
+    for (const e of (await entries()).filter((x) => x.table === 1).slice(0, 2)) {
+      await post(`/api/tournaments/${tid}/entries/${e.id}/bust`);
+    }
+    const now = (await entries()).filter((e) => e.bustSeq === null);
+    const leaving = now.filter((e) => e.table === 2);
+    const free = [3, 2, 1].filter((seat) => !now.some((e) => e.table === 1 && e.seat === seat));
+    const clash = leaving.map((e) => ({ entryId: e.id, to: { table: 1, seat: free[0] } }));
+    expect((await post(`/api/tournaments/${tid}/tables/2/break`, { moves: clash })).body.error).toMatch(/two players/);
+    const moves = leaving.map((e, i) => ({ entryId: e.id, to: { table: 1, seat: free[i] } }));
+    expect((await post(`/api/tournaments/${tid}/tables/2/break`, { moves })).status).toBe(200);
+    const after = await entries();
+    for (const m of moves) expect(after.find((e) => e.id === m.entryId)).toMatchObject(m.to);
+  });
+
   it('redraws seats without clashing and toggles hand-for-hand', async () => {
     expect((await post(`/api/tournaments/${tid}/tables/2/redraw`)).status).toBe(200);
     const two = (await entries()).filter((e) => e.table === 2);

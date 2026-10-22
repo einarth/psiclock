@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  breakMovesError,
   breakTableMoves,
   fieldStats,
+  freeSeats,
   finishingPlace,
   nextBalanceMove,
   playersAt,
@@ -92,6 +94,27 @@ describe('seating', () => {
     const counts = [1, 2].map((n) => playersAt(after, n).length);
     expect(counts.sort()).toEqual([7, 8]);
     expect(new Set(after.map((e) => `${e.table}-${e.seat}`)).size).toBe(15);
+  });
+
+  it('accepts the floor’s own seats for a broken table but not unbalanced or clashing ones', () => {
+    const t = tables(3);
+    const entries = seatAll(t, 15);
+    const moves = breakTableMoves(t, entries, 3, seeded(7))!;
+    expect(breakMovesError(t, entries, 3, moves)).toBeNull();
+    // Another free seat at the same table is fine.
+    const first = moves[0];
+    const other = freeSeats(t[first.to.table - 1], entries).find((s) => !moves.some((m) => m.to.table === first.to.table && m.to.seat === s))!;
+    const moved = [{ ...first, to: { ...first.to, seat: other } }, ...moves.slice(1)];
+    expect(breakMovesError(t, entries, 3, moved)).toBeNull();
+    // Two players in one seat, a taken seat, a missing player, or lopsided tables are refused.
+    expect(breakMovesError(t, entries, 3, [{ ...first, to: moves[1].to }, ...moves.slice(1)])).toMatch(/two players/);
+    const taken = playersAt(entries, first.to.table)[0].seat!;
+    expect(breakMovesError(t, entries, 3, [{ ...first, to: { ...first.to, seat: taken } }, ...moves.slice(1)])).toMatch(/not free/);
+    expect(breakMovesError(t, entries, 3, moves.slice(1))).toMatch(/exactly one/);
+    // Filling table 1 first leaves 9 against 6.
+    const fillOrder = [1, 2].flatMap((n) => freeSeats(t[n - 1], entries).map((seat) => ({ table: n, seat })));
+    const lopsided = playersAt(entries, 3).map((e, i) => ({ entryId: e.id, to: fillOrder[i] }));
+    expect(breakMovesError(t, entries, 3, lopsided)).toMatch(/balanced/);
   });
 
   it('refuses to break a table when there is no room', () => {

@@ -92,6 +92,50 @@ export function breakTableMoves(
   return moves;
 }
 
+/** Players per open table, after the moves, as the gap between the fullest and the shortest. */
+function spreadAfter(tables: TableConfig[], entries: Entry[], moves: { entryId: number; to: Seat }[]): number {
+  const moved = entries.map((e) => {
+    const m = moves.find((x) => x.entryId === e.id);
+    return m ? { ...e, ...m.to } : e;
+  });
+  const counts = openTables(tables).map((t) => playersAt(moved, t.number).length);
+  return counts.length ? Math.max(...counts) - Math.min(...counts) : 0;
+}
+
+/**
+ * Checks the floor's own seats for the players of a table being broken: each
+ * player once, to a free seat at another open table, no two to the same seat,
+ * and the room left as balanced as the suggested moves would leave it.
+ * Returns what is wrong, or null when the moves are fine.
+ */
+export function breakMovesError(
+  tables: TableConfig[],
+  entries: Entry[],
+  tableNo: number,
+  moves: { entryId: number; to: Seat }[],
+): string | null {
+  const players = playersAt(entries, tableNo);
+  const ids = new Set(moves.map((m) => m.entryId));
+  if (moves.length !== players.length || ids.size !== moves.length || players.some((p) => !ids.has(p.id))) {
+    return `every player at table ${tableNo} needs exactly one new seat`;
+  }
+  const remaining = tables.map((t) => (t.number === tableNo ? { ...t, open: false } : t));
+  const used = new Set<string>();
+  for (const m of moves) {
+    const table = remaining.find((t) => t.number === m.to.table && t.open);
+    if (!table) return `table ${m.to.table} is not open`;
+    if (!freeSeats(table, entries).includes(m.to.seat)) return `seat ${m.to.seat} at table ${m.to.table} is not free`;
+    const key = `${m.to.table}-${m.to.seat}`;
+    if (used.has(key)) return `two players are given seat ${m.to.seat} at table ${m.to.table}`;
+    used.add(key);
+  }
+  const suggested = breakTableMoves(tables, entries, tableNo, () => 0);
+  if (suggested && spreadAfter(remaining, entries, moves) > spreadAfter(remaining, entries, suggested)) {
+    return 'those tables would not be balanced';
+  }
+  return null;
+}
+
 /** A random new seat order for the players at a table, e.g. for the final table draw. */
 export function redrawSeats(table: TableConfig, entries: Entry[], rand: Rand): { entryId: number; seat: number }[] {
   const players = playersAt(entries, table.number);

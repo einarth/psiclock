@@ -3,6 +3,7 @@ import { api } from '../api';
 import { useClockView, useLiveTournament } from '../live';
 import { formatClock } from '../../shared/clock';
 import {
+  breakTableMoves,
   fieldStats,
   finishingPlace,
   freeSeats,
@@ -11,6 +12,7 @@ import {
   openTables,
   playersAt,
   tableToBreak,
+  type Seat,
 } from '../../shared/seating';
 import type { Entry, TableConfig } from '../../shared/types';
 import { blindsText, num, ordinal, short } from '../format';
@@ -20,6 +22,7 @@ type Sheet =
   | { kind: 'player'; entry: Entry }
   | { kind: 'move'; entry: Entry; suggested?: number }
   | { kind: 'table'; table: TableConfig }
+  | { kind: 'break'; table: number; moves: { entry: Entry; to: Seat }[] }
   | { kind: 'confirm'; text: string; action: () => Promise<unknown>; danger?: boolean }
   | { kind: 'handForHand' };
 
@@ -58,6 +61,21 @@ export function Floor({ id }: { id: number }) {
     } catch (err) {
       setError((err as Error).message);
     }
+  };
+
+  /** Suggests a new seat for each player at the table; the floor can change the seats before confirming. */
+  const openBreak = (no: number) => {
+    const players = playersAt(entries, no);
+    if (!players.length) {
+      setSheet({ kind: 'confirm', text: `Close table ${no}? Nobody is sitting there.`, action: () => act(() => api.breakTable(id, no), `Table ${no} closed`) });
+      return;
+    }
+    const plan = breakTableMoves(t.tables, entries, no, Math.random);
+    if (!plan) {
+      setError(`Not enough free seats to break table ${no}`);
+      return;
+    }
+    setSheet({ kind: 'break', table: no, moves: plan.map((m) => ({ entry: players.find((p) => p.id === m.entryId)!, to: m.to })) });
   };
 
   const bust = (e: Entry) => {
@@ -171,15 +189,7 @@ export function Floor({ id }: { id: number }) {
       {breakable && !picking && (
         <div className="floor-alert action">
           Table {breakable} can be broken.
-          <button
-            onClick={() =>
-              setSheet({
-                kind: 'confirm',
-                text: `Break table ${breakable} and draw new seats for its ${playersAt(entries, breakable).length} players?`,
-                action: () => act(() => api.breakTable(id, breakable), `Table ${breakable} broken`),
-              })
-            }
-          >
+          <button onClick={() => openBreak(breakable)}>
             Break table {breakable}
           </button>
         </div>
@@ -310,19 +320,19 @@ export function Floor({ id }: { id: number }) {
                 >
                   Redraw seats
                 </button>
-                <button
-                  className="big"
-                  onClick={() =>
-                    setSheet({
-                      kind: 'confirm',
-                      text: `Break table ${sheet.table.number} and move its players?`,
-                      action: () => act(() => api.breakTable(id, sheet.table.number), `Table ${sheet.table.number} broken`),
-                    })
-                  }
-                >
+                <button className="big" onClick={() => openBreak(sheet.table.number)}>
                   Break this table
                 </button>
               </>
+            )}
+            {sheet.kind === 'break' && (
+              <BreakPlan
+                sheet={sheet}
+                entries={entries}
+                tables={t.tables}
+                onChange={setSheet}
+                onConfirm={(moves) => act(() => api.breakTable(id, sheet.table, moves), `Table ${sheet.table} broken`)}
+              />
             )}
             {sheet.kind === 'handForHand' && (
               <>
@@ -385,5 +395,80 @@ export function Floor({ id }: { id: number }) {
         </div>
       )}
     </main>
+  );
+}
+
+type BreakSheet = Extract<Sheet, { kind: 'break' }>;
+
+/** Where each player of a broken table goes. Tables are fixed by the balancing; seats can be changed. */
+function BreakPlan({
+  sheet,
+  entries,
+  tables,
+  onChange,
+  onConfirm,
+}: {
+  sheet: BreakSheet;
+  entries: Entry[];
+  tables: TableConfig[];
+  onChange: (s: BreakSheet) => void;
+  onConfirm: (moves: { entryId: number; to: Seat }[]) => void;
+}) {
+  const holder = (to: Seat, except: number) =>
+    sheet.moves.find((m) => m.entry.id !== except && m.to.table === to.table && m.to.seat === to.seat);
+  const clash = sheet.moves.find((m) => holder(m.to, m.entry.id));
+  const setSeat = (entryId: number, seat: number) =>
+    onChange({ ...sheet, moves: sheet.moves.map((m) => (m.entry.id === entryId ? { ...m, to: { ...m.to, seat } } : m)) });
+  return (
+    <>
+      <h2>Break table {sheet.table}</h2>
+      <p className="muted small">The tables keep the room balanced. Change a seat if another one is closer to the big blind.</p>
+      <ul className="list break-plan">
+        {sheet.moves.map((m) => {
+          const free = freeSeats(tables.find((x) => x.number === m.to.table)!, entries);
+          return (
+            <li key={m.entry.id}>
+              <span>
+                <strong>{m.entry.playerName}</strong> <span className="muted">from seat {m.entry.seat}</span>
+              </span>
+              <span className="break-to">
+                Table {m.to.table}, seat{' '}
+                {free.length > 1 ? (
+                  <select
+                    aria-label={`Seat for ${m.entry.playerName}`}
+                    value={m.to.seat}
+                    onChange={(e) => setSeat(m.entry.id, Number(e.target.value))}
+                  >
+                    {free.map((seat) => {
+                      const other = holder({ table: m.to.table, seat }, m.entry.id);
+                      return (
+                        <option key={seat} value={seat}>
+                          {seat}
+                          {other ? ` (${other.entry.playerName})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                ) : (
+                  <b>{m.to.seat}</b>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {clash && (
+        <p className="error">
+          Two players have seat {clash.to.seat} at table {clash.to.table}.
+        </p>
+      )}
+      <button
+        className="primary big"
+        disabled={!!clash}
+        onClick={() => onConfirm(sheet.moves.map((m) => ({ entryId: m.entry.id, to: m.to })))}
+      >
+        Move players and close table {sheet.table}
+      </button>
+    </>
   );
 }

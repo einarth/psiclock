@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Storage } from './storage/storage.js';
 import { ActionError, type RunAction } from './actions.js';
 import {
+  breakMovesError,
   breakTableMoves,
   finishingPlace,
   freeSeats,
@@ -9,6 +10,7 @@ import {
   redrawSeats,
   seatForNewPlayer,
   type Rand,
+  type Seat,
 } from '../shared/seating.js';
 import { applyClockCommand, clockAt } from '../shared/clock.js';
 import { withinLevel } from '../shared/money.js';
@@ -97,11 +99,20 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
     }),
   );
 
-  app.post<{ Params: PT }>('/api/tournaments/:id/tables/:table/break', (req, reply) =>
+  // The floor may send its own seats for the moved players (body.moves); otherwise seats are drawn.
+  app.post<{ Params: PT; Body: { moves?: { entryId: number; to: Seat }[] } }>('/api/tournaments/:id/tables/:table/break', (req, reply) =>
     run(reply, Number(req.params.id), 'table.break', 'floor', async ({ t, entries }) => {
       const no = Number(req.params.table);
       if (!t.tables.some((x) => x.number === no && x.open)) throw new ActionError(`table ${no} is not open`);
-      const moves = breakTableMoves(t.tables, entries, no, rand);
+      const chosen = req.body?.moves;
+      if (chosen !== undefined) {
+        const wellFormed =
+          Array.isArray(chosen) &&
+          chosen.every((m) => m && Number.isInteger(m.entryId) && m.to && Number.isInteger(m.to.table) && Number.isInteger(m.to.seat));
+        const error = wellFormed ? breakMovesError(t.tables, entries, no, chosen) : 'moves must list an entry and a table and seat for each';
+        if (error) throw new ActionError(error);
+      }
+      const moves = chosen?.map((m) => ({ entryId: m.entryId, to: { table: m.to.table, seat: m.to.seat } })) ?? breakTableMoves(t.tables, entries, no, rand);
       if (!moves) throw new ActionError(`not enough free seats to break table ${no}`);
       for (const m of moves) await storage.updateEntry(m.entryId, { ...m.to, bustSeq: null });
       await storage.updateTournament(t.id, {
