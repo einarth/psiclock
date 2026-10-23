@@ -30,6 +30,8 @@ type Sheet =
   | { kind: 'confirm'; text: string; action: () => Promise<unknown>; danger?: boolean }
   | { kind: 'handForHand' };
 
+const players = (n: number) => `${n} player${n === 1 ? '' : 's'}`;
+
 /** The floor manager's phone or tablet view: bust players, move them, balance and break tables. */
 export function Floor({ id }: { id: number }) {
   const { tournament: t, entries, offset, connected } = useLiveTournament(id);
@@ -177,8 +179,8 @@ export function Floor({ id }: { id: number }) {
 
       {balance && (
         <div className="floor-alert action">
-          Table {balance.from} has {playersAt(entries, balance.from).length}, table {balance.to} has{' '}
-          {playersAt(entries, balance.to).length}.
+          Table {balance.from} has {players(playersAt(entries, balance.from).length)}, table {balance.to} has{' '}
+          {players(playersAt(entries, balance.to).length)}.
           <button onClick={openBalance}>Balance tables</button>
         </div>
       )}
