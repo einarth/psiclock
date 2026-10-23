@@ -50,8 +50,9 @@ export function Floor({ id }: { id: number }) {
 
   const stats = fieldStats(entries, t.startingStack);
   const prizes = payoutsFor(t, entries);
-  const balance = nextBalanceMove(t.tables, entries);
   const breakable = tableToBreak(t.tables, entries);
+  // Breaking a table comes first; balancing is suggested once no table can be broken.
+  const balance = breakable ? null : nextBalanceMove(t.tables, entries);
   const open = openTables(t.tables);
   const q = search.trim().toLowerCase();
   const matches = (e: Entry) => q !== '' && e.playerName.toLowerCase().includes(q);
