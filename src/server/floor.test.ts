@@ -146,6 +146,23 @@ describe('floor actions', () => {
     for (const m of moves) expect(after.find((e) => e.id === m.entryId)).toMatchObject(m.to);
   });
 
+  it('balances the tables with the player and seat the floor picked', async () => {
+    // Empty the shorter table so the tables are 3 against 0.
+    const list = await entries();
+    const short = [1, 2].find((n) => list.filter((e) => e.table === n).length === 2)!;
+    const full = 3 - short;
+    for (const e of list.filter((x) => x.table === short)) await post(`/api/tournaments/${tid}/entries/${e.id}/bust`);
+    const mover = list.find((e) => e.table === full)!;
+    const stay = list.find((e) => e.table === full && e.id !== mover.id)!;
+    const url = `/api/tournaments/${tid}/tables/balance`;
+    expect((await post(url, { moves: [] })).body.error).toMatch(/needs 1 move/);
+    expect((await post(url, { moves: [{ entryId: mover.id, to: { table: full, seat: stay.seat } }] })).body.error).toMatch(/already at table/);
+    const res = await post(url, { moves: [{ entryId: mover.id, to: { table: short, seat: 2 } }] });
+    expect(res.status).toBe(200);
+    expect((await entries()).find((e) => e.id === mover.id)).toMatchObject({ table: short, seat: 2 });
+    expect((await post(url, {})).body.error).toMatch(/already balanced/);
+  });
+
   it('redraws seats without clashing and toggles hand-for-hand', async () => {
     expect((await post(`/api/tournaments/${tid}/tables/2/redraw`)).status).toBe(200);
     const two = (await entries()).filter((e) => e.table === 2);

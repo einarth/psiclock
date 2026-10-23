@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  balanceMoves,
+  balanceMovesError,
   breakMovesError,
   breakTableMoves,
   fieldStats,
@@ -63,14 +65,41 @@ describe('seating', () => {
     expect(seatForNewPlayer(t, entries, seeded())).toBeNull();
   });
 
-  it('asks for a balance move only when tables differ by two or more', () => {
+  it('asks for a balance move only when tables differ by more than two', () => {
     const t = tables(2);
-    const a = [entry(1, 1), entry(1, 2), entry(1, 3), entry(2, 1), entry(2, 2)];
+    const a = [entry(1, 1), entry(1, 2), entry(1, 3), entry(1, 4), entry(2, 1), entry(2, 2)];
     expect(nextBalanceMove(t, a)).toBeNull();
-    const b = [...a, entry(1, 4)];
+    const b = [...a, entry(1, 5)];
     expect(nextBalanceMove(t, b)).toEqual({ from: 1, to: 2 });
-    const busted = [...b.slice(0, 5).map((e) => (e.table === 2 && e.seat === 2 ? { ...e, bustSeq: 1 } : e)), b[5]];
+    const busted = [...a.map((e) => (e.table === 2 && e.seat === 2 ? { ...e, bustSeq: 1 } : e))];
     expect(nextBalanceMove(t, busted)).toEqual({ from: 1, to: 2 });
+  });
+
+  it('plans the fewest moves that balance the tables, and checks the floor’s changes', () => {
+    const t = tables(3);
+    const seats = (table: number, n: number) => Array.from({ length: n }, (_, i) => entry(table, i + 1));
+    const entries = [...seats(1, 9), ...seats(2, 9), ...seats(3, 5)];
+    const moves = balanceMoves(t, entries, seeded());
+    expect(moves.map((m) => [m.from, m.to.table])).toEqual([
+      [1, 3],
+      [2, 3],
+    ]);
+    expect(new Set(moves.map((m) => m.to.seat)).size).toBe(2);
+    expect(moves.every((m) => m.to.seat >= 6)).toBe(true);
+    expect(balanceMovesError(t, entries, moves)).toBeNull();
+    // The floor may pick another player at the same table and another free seat.
+    const other = entries.find((e) => e.table === 1 && e.id !== moves[0].entryId)!;
+    const seat = [6, 7, 8, 9].find((s) => !moves.some((m) => m.to.seat === s))!;
+    expect(balanceMovesError(t, entries, [{ entryId: other.id, to: { table: 3, seat } }, moves[1]])).toBeNull();
+    // Clashes, too few moves, moving to the wrong table, or a taken seat are refused.
+    expect(balanceMovesError(t, entries, [moves[0], { ...moves[1], to: moves[0].to }])).toMatch(/two players/);
+    expect(balanceMovesError(t, entries, [moves[0]])).toMatch(/needs 2 moves/);
+    expect(balanceMovesError(t, entries, [moves[0], { ...moves[1], to: { table: 1, seat: 9 } }])).toMatch(/not free/);
+    const third = entries.find((e) => e.table === 3)!;
+    expect(balanceMovesError(t, entries, [moves[0], { entryId: third.id, to: moves[1].to }])).toMatch(/already at table 3/);
+    expect(balanceMovesError(t, entries, [moves[0], { ...moves[1], entryId: moves[0].entryId }])).toMatch(/moved twice/);
+    expect(balanceMoves(t, [...seats(1, 9), ...seats(2, 9), ...seats(3, 7)], seeded())).toEqual([]);
+    expect(balanceMovesError(t, [...seats(1, 9), ...seats(2, 9), ...seats(3, 7)], moves)).toMatch(/already balanced/);
   });
 
   it('breaks the highest table once the others can seat everyone', () => {

@@ -123,6 +123,8 @@ export const api = {
   move: (id: number, entryId: number, table: number, seat?: number) =>
     call<Seat>('POST', `/api/tournaments/${id}/entries/${entryId}/move`, { table, seat }),
   addTable: (id: number, seats?: number) => call<{ number: number }>('POST', `/api/tournaments/${id}/tables`, { seats }),
+  balanceTables: (id: number, moves: { entryId: number; to: { table: number; seat: number } }[]) =>
+    call<unknown>('POST', `/api/tournaments/${id}/tables/balance`, { moves }),
   breakTable: (id: number, table: number, moves?: { entryId: number; to: { table: number; seat: number } }[]) =>
     call<unknown>('POST', `/api/tournaments/${id}/tables/${table}/break`, moves ? { moves } : {}),
   redraw: (id: number, table: number) => call<unknown>('POST', `/api/tournaments/${id}/tables/${table}/redraw`),

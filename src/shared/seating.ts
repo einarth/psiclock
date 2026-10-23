@@ -3,7 +3,7 @@ import type { Entry, TableConfig } from './types.js';
 /**
  * Seating rules, written as pure functions so they can be tested without a
  * server. They follow TDA practice: random seat draws, new players go to the
- * shortest table, tables are balanced when they differ by two or more, and
+ * shortest table, tables are balanced when they differ by more than two, and
  * tables are broken in a fixed order (highest number first).
  */
 
@@ -48,6 +48,9 @@ export interface BalanceMove {
   to: number;
 }
 
+/** Tables need balancing when the fullest has this many more players than the shortest. */
+export const BALANCE_GAP = 3;
+
 /**
  * The next move needed to balance tables, or null if they are balanced.
  * Moves one player from the fullest table to the shortest one.
@@ -57,7 +60,7 @@ export function nextBalanceMove(tables: TableConfig[], entries: Entry[]): Balanc
   if (counts.length < 2) return null;
   const most = counts.reduce((a, b) => (b.count > a.count ? b : a));
   const least = counts.reduce((a, b) => (b.count < a.count ? b : a));
-  if (most.count - least.count < 2) return null;
+  if (most.count - least.count < BALANCE_GAP) return null;
   return { from: most.t.number, to: least.t.number };
 }
 
@@ -133,6 +136,68 @@ export function breakMovesError(
   if (suggested && spreadAfter(remaining, entries, moves) > spreadAfter(remaining, entries, suggested)) {
     return 'those tables would not be balanced';
   }
+  return null;
+}
+
+export interface PlannedMove {
+  entryId: number;
+  from: number;
+  to: Seat;
+}
+
+/**
+ * The fewest moves, fullest table to shortest, that bring the tables back
+ * within BALANCE_GAP, each to a random free seat. Seats freed by a moving
+ * player are not reused. Empty when the tables are already balanced.
+ */
+export function balanceMoves(tables: TableConfig[], entries: Entry[], rand: Rand): PlannedMove[] {
+  const open = openTables(tables);
+  let working = entries.map((e) => ({ ...e }));
+  const moves: PlannedMove[] = [];
+  const taken = new Set<string>();
+  while (open.length >= 2) {
+    const counts = open.map((t) => ({ t, count: playersAt(working, t.number).length }));
+    const most = counts.reduce((a, b) => (b.count > a.count ? b : a));
+    const least = counts.reduce((a, b) => (b.count < a.count ? b : a));
+    if (most.count - least.count < BALANCE_GAP) break;
+    const free = freeSeats(least.t, entries).filter((s) => !taken.has(`${least.t.number}-${s}`));
+    const movable = playersAt(working, most.t.number).filter((e) => !moves.some((m) => m.entryId === e.id));
+    if (!free.length || !movable.length) break;
+    const player = pick(movable, rand);
+    const to = { table: least.t.number, seat: pick(free, rand) };
+    moves.push({ entryId: player.id, from: most.t.number, to });
+    taken.add(`${to.table}-${to.seat}`);
+    working = working.map((w) => (w.id === player.id ? { ...w, ...to } : w));
+  }
+  return moves;
+}
+
+/**
+ * Checks the floor's own balancing moves: the same number of moves as the
+ * suggestion, each a different player still in, to a free seat at another
+ * open table, no two to the same seat, and the room left as balanced as the
+ * suggestion would leave it. Returns what is wrong, or null when fine.
+ */
+export function balanceMovesError(tables: TableConfig[], entries: Entry[], moves: { entryId: number; to: Seat }[]): string | null {
+  const suggested = balanceMoves(tables, entries, () => 0);
+  if (!suggested.length) return 'the tables are already balanced';
+  if (moves.length !== suggested.length) return `balancing needs ${suggested.length} move${suggested.length > 1 ? 's' : ''}`;
+  const used = new Set<string>();
+  const ids = new Set<number>();
+  for (const m of moves) {
+    const e = entries.find((x) => x.id === m.entryId && isAlive(x));
+    if (!e) return 'every moved player must still be in';
+    if (ids.has(e.id)) return `${e.playerName} is moved twice`;
+    ids.add(e.id);
+    const table = openTables(tables).find((t) => t.number === m.to.table);
+    if (!table) return `table ${m.to.table} is not open`;
+    if (table.number === e.table) return `${e.playerName} is already at table ${table.number}`;
+    if (!freeSeats(table, entries).includes(m.to.seat)) return `seat ${m.to.seat} at table ${m.to.table} is not free`;
+    const key = `${m.to.table}-${m.to.seat}`;
+    if (used.has(key)) return `two players are given seat ${m.to.seat} at table ${m.to.table}`;
+    used.add(key);
+  }
+  if (spreadAfter(tables, entries, moves) > spreadAfter(tables, entries, suggested)) return 'those tables would not be balanced';
   return null;
 }
 

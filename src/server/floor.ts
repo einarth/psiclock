@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import type { Storage } from './storage/storage.js';
 import { ActionError, type RunAction } from './actions.js';
 import {
+  balanceMoves,
+  balanceMovesError,
   breakMovesError,
   breakTableMoves,
   finishingPlace,
@@ -121,6 +123,30 @@ export function registerFloorRoutes(app: FastifyInstance, storage: Storage, run:
         ...(t.screen.autoMoves && moves.length ? { screen: { ...t.screen, scene: 'moves' as const, until: Date.now() + 60_000 } } : {}),
       });
       return { result: moves, payload: { table: no, moves } };
+    }),
+  );
+
+  // Moves players from the fullest tables to the shortest; the floor may pick the players and seats (body.moves).
+  app.post<{ Params: P; Body: { moves?: { entryId: number; to: Seat }[] } }>('/api/tournaments/:id/tables/balance', (req, reply) =>
+    run(reply, Number(req.params.id), 'table.balance', 'floor', async ({ t, entries }) => {
+      const chosen = req.body?.moves;
+      if (chosen !== undefined) {
+        const wellFormed =
+          Array.isArray(chosen) &&
+          chosen.every((m) => m && Number.isInteger(m.entryId) && m.to && Number.isInteger(m.to.table) && Number.isInteger(m.to.seat));
+        const error = wellFormed ? balanceMovesError(t.tables, entries, chosen) : 'moves must list an entry and a table and seat for each';
+        if (error) throw new ActionError(error);
+      }
+      const planned = chosen ?? balanceMoves(t.tables, entries, rand);
+      if (!planned.length) throw new ActionError('the tables are already balanced');
+      const moves = planned.map((m) => {
+        const e = entries.find((x) => x.id === m.entryId)!;
+        return { entryId: e.id, from: { table: e.table, seat: e.seat }, to: { table: m.to.table, seat: m.to.seat } };
+      });
+      for (const m of moves) await storage.updateEntry(m.entryId, { ...m.to, bustSeq: null });
+      // Put the moves on the big screens for a minute so players can find their new seats.
+      if (t.screen.autoMoves) await storage.updateTournament(t.id, { screen: { ...t.screen, scene: 'moves' as const, until: Date.now() + 60_000 } });
+      return { result: moves, payload: { moves } };
     }),
   );
 

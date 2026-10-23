@@ -7,7 +7,7 @@ import type { ActionLogEntry, Entry, Id, Move, Scene, ScreenState } from '../sha
 const scenes: Scene[] = ['clock', 'seating', 'moves', 'payouts', 'message'];
 const imageTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
 const MAX_IMAGE = 5 * 1024 * 1024;
-export const MOVE_TYPES = ['entry.move', 'table.break', 'table.redraw'];
+export const MOVE_TYPES = ['entry.move', 'table.balance', 'table.break', 'table.redraw'];
 
 /** The layout a tournament's screens use: its saved layout, or the built-in one. */
 export async function layoutFor(storage: Storage, layoutId: Id | null): Promise<LayoutConfig> {
@@ -27,6 +27,8 @@ export function movesFrom(actions: ActionLogEntry[], entries: Entry[], now = Dat
     const name = (id: number) => names.get(id) ?? '?';
     if (a.type === 'entry.move') {
       moves.push({ at: a.createdAt, playerName: name(p.entryId), from: p.from, to: p.to, reason: 'balance' });
+    } else if (a.type === 'table.balance') {
+      for (const m of p.moves ?? []) moves.push({ at: a.createdAt, playerName: name(m.entryId), from: m.from, to: m.to, reason: 'balance' });
     } else if (a.type === 'table.break') {
       for (const m of p.moves ?? []) {
         moves.push({ at: a.createdAt, playerName: name(m.entryId), from: { table: p.table, seat: null }, to: m.to, reason: 'break' });
